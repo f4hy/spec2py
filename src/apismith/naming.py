@@ -14,6 +14,7 @@ __all__ = [
     "snake",
 ]
 
+
 def _ascii(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
 

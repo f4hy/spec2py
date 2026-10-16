@@ -41,7 +41,9 @@ def load_api(source: str, config: Config | None = None) -> Pipeline:
     document = normalize(raw, base)
     api = build_ir(document)
     plan = plan_api(api, config)
-    return Pipeline(config=config, document=document, api=api, plan=plan, overlay_reports=reports)
+    return Pipeline(
+        config=config, document=document, api=api, plan=plan, overlay_reports=reports
+    )
 
 
 def generate(

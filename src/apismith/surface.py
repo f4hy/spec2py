@@ -8,7 +8,7 @@ whether that is breaking.
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
-from .plan import MISSING, PModel, Plan
+from .plan import MISSING, Plan, PModel
 
 __all__ = ["Change", "SurfaceDiff", "api_surface", "diff_surfaces", "suggest_version"]
 
@@ -84,22 +84,42 @@ class SurfaceDiff:
             return "No API changes."
         lines = []
         for c in sorted(self.changes, key=lambda c: (not c.breaking, c.path)):
-            marker = "!" if c.breaking else {"added": "+", "removed": "-", "changed": "~"}[c.kind]
+            marker = (
+                "!"
+                if c.breaking
+                else {"added": "+", "removed": "-", "changed": "~"}[c.kind]
+            )
             lines.append(f"  {marker} {c.path}: {c.detail}")
         summary = f"{len(self.changes)} change(s), {len(self.breaking)} breaking"
         return summary + "\n" + "\n".join(lines)
 
 
-def _diff_params(path: str, old: dict[str, Any], new: dict[str, Any], out: list[Change]) -> None:
+def _diff_params(
+    path: str, old: dict[str, Any], new: dict[str, Any], out: list[Change]
+) -> None:
     for name in sorted(old.keys() - new.keys()):
         out.append(Change("removed", f"{path}({name})", "parameter removed", True))
     for name in sorted(new.keys() - old.keys()):
         required = new[name]["required"]
-        out.append(Change("added", f"{path}({name})", "required parameter added" if required else "optional parameter added", required))
+        out.append(
+            Change(
+                "added",
+                f"{path}({name})",
+                "required parameter added" if required else "optional parameter added",
+                required,
+            )
+        )
     for name in sorted(old.keys() & new.keys()):
         o, n = old[name], new[name]
         if o["type"] != n["type"]:
-            out.append(Change("changed", f"{path}({name})", f"type {o['type']} -> {n['type']}", True))
+            out.append(
+                Change(
+                    "changed",
+                    f"{path}({name})",
+                    f"type {o['type']} -> {n['type']}",
+                    True,
+                )
+            )
         elif n["required"] and not o["required"]:
             out.append(Change("changed", f"{path}({name})", "now required", True))
         elif o["required"] and not n["required"]:
@@ -112,14 +132,24 @@ def diff_surfaces(old: Surface, new: Surface) -> SurfaceDiff:
     old_m = cast(dict[str, Any], old.get("methods", {}))
     new_m = cast(dict[str, Any], new.get("methods", {}))
     for name in sorted(old_m.keys() - new_m.keys()):
-        changes.append(Change("removed", name, f"method removed ({old_m[name]['operation']})", True))
+        changes.append(
+            Change(
+                "removed", name, f"method removed ({old_m[name]['operation']})", True
+            )
+        )
     for name in sorted(new_m.keys() - old_m.keys()):
-        changes.append(Change("added", name, f"method added ({new_m[name]['operation']})", False))
+        changes.append(
+            Change("added", name, f"method added ({new_m[name]['operation']})", False)
+        )
     for name in sorted(old_m.keys() & new_m.keys()):
         o, n = old_m[name], new_m[name]
         _diff_params(name, o["params"], n["params"], changes)
         if o["returns"] != n["returns"]:
-            changes.append(Change("changed", name, f"returns {o['returns']} -> {n['returns']}", True))
+            changes.append(
+                Change(
+                    "changed", name, f"returns {o['returns']} -> {n['returns']}", True
+                )
+            )
         if n["deprecated"] and not o["deprecated"]:
             changes.append(Change("changed", name, "deprecated", False))
     old_t = cast(dict[str, Any], old.get("models", {}))
@@ -132,23 +162,41 @@ def diff_surfaces(old: Surface, new: Surface) -> SurfaceDiff:
         o, n = old_t[name], new_t[name]
         if "alias" in o or "alias" in n:
             if o.get("alias") != n.get("alias"):
-                changes.append(Change("changed", f"models.{name}", f"{o.get('alias')} -> {n.get('alias')}", True))
+                changes.append(
+                    Change(
+                        "changed",
+                        f"models.{name}",
+                        f"{o.get('alias')} -> {n.get('alias')}",
+                        True,
+                    )
+                )
             continue
         of, nf = o["fields"], n["fields"]
         for f in sorted(of.keys() - nf.keys()):
-            changes.append(Change("removed", f"models.{name}.{f}", "field removed", True))
+            changes.append(
+                Change("removed", f"models.{name}.{f}", "field removed", True)
+            )
         for f in sorted(nf.keys() - of.keys()):
-            changes.append(Change("added", f"models.{name}.{f}", "field added", nf[f]["required"]))
+            changes.append(
+                Change("added", f"models.{name}.{f}", "field added", nf[f]["required"])
+            )
         for f in sorted(of.keys() & nf.keys()):
             if of[f]["type"] != nf[f]["type"]:
-                changes.append(Change("changed", f"models.{name}.{f}", f"type {of[f]['type']} -> {nf[f]['type']}", True))
+                changes.append(
+                    Change(
+                        "changed",
+                        f"models.{name}.{f}",
+                        f"type {of[f]['type']} -> {nf[f]['type']}",
+                        True,
+                    )
+                )
     return SurfaceDiff(changes)
 
 
 def suggest_version(current: str, bump: Bump) -> str:
     """Next version for ``bump``. Before 1.0, breaking changes bump the minor
     and additions bump the patch (the Cargo convention)."""
-    parts = [int(p) if p.isdigit() else 0 for p in (current.split(".") + ["0", "0"])[:3]]
+    parts = [int(p) if p.isdigit() else 0 for p in [*current.split("."), "0", "0"][:3]]
     major, minor, patch = parts
     match bump:
         case "major" if major == 0:

@@ -3,7 +3,18 @@
 import ast
 
 from ..plan import RUNTIME, PAuth, Plan, PResource
-from .pyast import Imports, TName, TNone, TSub, TUnion, arg, call, const, doc_expr, docstring
+from .pyast import (
+    Imports,
+    TName,
+    TNone,
+    TSub,
+    TUnion,
+    arg,
+    call,
+    const,
+    doc_expr,
+    docstring,
+)
 from .resources import resource_class_names
 from .unasync import RUNTIME_RENAMES, to_sync
 
@@ -15,12 +26,19 @@ class _ClientEmitter:
         self.plan = plan
         self.client = plan.client
         name = self.client.class_name
-        self.renames = {f"Async{name}": name, f"Async{name}WithRawResponse": f"{name}WithRawResponse"}
+        self.renames = {
+            f"Async{name}": name,
+            f"Async{name}WithRawResponse": f"{name}WithRawResponse",
+        }
         for r in plan.resources:
             self.renames.update(resource_class_names(r))
             if r.custom:
                 self.renames[f"Async{r.custom[1]}"] = r.custom[1]
-        self.imports = Imports(package=self.client.package, here="_client", reserved=[*self.renames, *self.renames.values()])
+        self.imports = Imports(
+            package=self.client.package,
+            here="_client",
+            reserved=[*self.renames, *self.renames.values()],
+        )
         self.imports.preassign(RUNTIME, *RUNTIME_RENAMES.values(), "AsyncAPIClient")
 
     def rt(self, name: str) -> ast.expr:
@@ -35,7 +53,9 @@ class _ClientEmitter:
                 self.imports.name(module, async_name)
                 self.imports.name(module, sync_name)
         if r.custom and not raw:
-            custom_module = "._custom." + r.custom[0].removeprefix("_custom.").removeprefix(".")
+            custom_module = "._custom." + r.custom[0].removeprefix(
+                "_custom."
+            ).removeprefix(".")
             self.imports.preassign(custom_module, r.custom[1], f"Async{r.custom[1]}")
             self.imports.name(custom_module, r.custom[1])
             self.imports.name(custom_module, f"Async{r.custom[1]}")
@@ -51,14 +71,27 @@ class _ClientEmitter:
                         ast.IfExp(
                             ast.Compare(ast.Name(py), [ast.IsNot()], [const(None)]),
                             ast.Name(py),
-                            call(ast.Attribute(ast.Attribute(ast.Name(self.imports.module("os")), "environ"), "get"), const(env)),
+                            call(
+                                ast.Attribute(
+                                    ast.Attribute(
+                                        ast.Name(self.imports.module("os")), "environ"
+                                    ),
+                                    "get",
+                                ),
+                                const(env),
+                            ),
                         ),
                     )
                 )
         if not self.client.auth:
             return out
-        auths_ann = ast.Subscript(ast.Name("list"), ast.Attribute(ast.Name(self.imports.module("httpx2")), "Auth"))
-        build: list[ast.stmt] = [ast.AnnAssign(ast.Name("auths"), auths_ann, ast.List([]), simple=1)]
+        auths_ann = ast.Subscript(
+            ast.Name("list"),
+            ast.Attribute(ast.Name(self.imports.module("httpx2")), "Auth"),
+        )
+        build: list[ast.stmt] = [
+            ast.AnnAssign(ast.Name("auths"), auths_ann, ast.List([]), simple=1)
+        ]
         for auth in self.client.auth:
             build.append(self.auth_append(auth))
         build.append(
@@ -67,16 +100,24 @@ class _ClientEmitter:
                 ast.IfExp(
                     ast.Compare(call("len", ast.Name("auths")), [ast.Eq()], [const(1)]),
                     ast.Subscript(ast.Name("auths"), const(0)),
-                    ast.IfExp(ast.Name("auths"), call(self.rt("MultiAuth"), ast.Name("auths")), const(None)),
+                    ast.IfExp(
+                        ast.Name("auths"),
+                        call(self.rt("MultiAuth"), ast.Name("auths")),
+                        const(None),
+                    ),
                 ),
             )
         )
-        out.append(ast.If(ast.Compare(ast.Name("auth"), [ast.Is()], [const(None)]), build, []))
+        out.append(
+            ast.If(ast.Compare(ast.Name("auth"), [ast.Is()], [const(None)]), build, [])
+        )
         return out
 
     def auth_append(self, auth: PAuth) -> ast.stmt:
         attrs = [ast.Attribute(ast.Name("self"), py) for py, _ in auth.params]
-        conds = [ast.Compare(a, [ast.IsNot()], [const(None)]) for a in attrs]
+        conds: list[ast.expr] = [
+            ast.Compare(a, [ast.IsNot()], [const(None)]) for a in attrs
+        ]
         test: ast.expr = conds[0] if len(conds) == 1 else ast.BoolOp(ast.And(), conds)
         match auth.kind:
             case "api_key":
@@ -97,7 +138,15 @@ class _ClientEmitter:
                     token_expr = call(
                         "str",
                         call(
-                            ast.Attribute(call(ast.Attribute(ast.Name(self.imports.module("httpx2")), "URL"), ast.Name("resolved_base_url")), "join"),
+                            ast.Attribute(
+                                call(
+                                    ast.Attribute(
+                                        ast.Name(self.imports.module("httpx2")), "URL"
+                                    ),
+                                    ast.Name("resolved_base_url"),
+                                ),
+                                "join",
+                            ),
                             const(token_url),
                         ),
                     )
@@ -126,26 +175,69 @@ class _ClientEmitter:
                 add(py, str_or_none.to_ast(self.imports), const(None))
         httpx = self.imports.module("httpx2")
         add("base_url", str_or_none.to_ast(self.imports), const(None))
-        add("auth", ast.BinOp(ast.Attribute(ast.Name(httpx), "Auth"), ast.BitOr(), const(None)), const(None))
-        add("timeout", ast.Name(self.imports.name(RUNTIME, "TimeoutTypes")), self.rt("DEFAULT_TIMEOUT"))
+        add(
+            "auth",
+            ast.BinOp(ast.Attribute(ast.Name(httpx), "Auth"), ast.BitOr(), const(None)),
+            const(None),
+        )
+        add(
+            "timeout",
+            ast.Name(self.imports.name(RUNTIME, "TimeoutTypes")),
+            self.rt("DEFAULT_TIMEOUT"),
+        )
         add("max_retries", ast.Name("int"), self.rt("DEFAULT_MAX_RETRIES"))
-        mapping = lambda v: TUnion.of(TSub(TName("Mapping", "collections.abc"), (TName("str"), TName(v))), TNone()).to_ast(self.imports)  # noqa: E731
+
+        def mapping(value: str) -> ast.expr:
+            mapping_type = TSub(
+                TName("Mapping", "collections.abc"), (TName("str"), TName(value))
+            )
+            return TUnion.of(mapping_type, TNone()).to_ast(self.imports)
+
         add("default_headers", mapping("str"), const(None))
         add("default_query", mapping("object"), const(None))
-        add("hooks", TUnion.of(TName("Hooks", RUNTIME), TNone()).to_ast(self.imports), const(None))
+        add(
+            "hooks",
+            TUnion.of(TName("Hooks", RUNTIME), TNone()).to_ast(self.imports),
+            const(None),
+        )
         add("strict_response_validation", ast.Name("bool"), const(False))
-        add("http_client", ast.BinOp(ast.Attribute(ast.Name(httpx), "AsyncClient"), ast.BitOr(), const(None)), const(None))
-        add("transport", ast.BinOp(ast.Attribute(ast.Name(httpx), "AsyncBaseTransport"), ast.BitOr(), const(None)), const(None))
+        add(
+            "http_client",
+            ast.BinOp(
+                ast.Attribute(ast.Name(httpx), "AsyncClient"), ast.BitOr(), const(None)
+            ),
+            const(None),
+        )
+        add(
+            "transport",
+            ast.BinOp(
+                ast.Attribute(ast.Name(httpx), "AsyncBaseTransport"),
+                ast.BitOr(),
+                const(None),
+            ),
+            const(None),
+        )
 
         env_base = f"{c.env_prefix}_BASE_URL"
-        environ_get = call(ast.Attribute(ast.Attribute(ast.Name(self.imports.module("os")), "environ"), "get"), const(env_base))
+        environ_get = call(
+            ast.Attribute(
+                ast.Attribute(ast.Name(self.imports.module("os")), "environ"), "get"
+            ),
+            const(env_base),
+        )
         base_value: ast.expr = ast.BoolOp(ast.Or(), [ast.Name("base_url"), environ_get])
         if c.base_url:
             base_value.values.append(const(c.base_url))  # type: ignore[attr-defined]
         body: list[ast.stmt] = []
         arg_docs = [
-            *(f"{py}: Defaults to the ``{env}`` environment variable." for a in c.auth for py, env in a.params),
-            f"base_url: Defaults to ``{env_base}``, then ``{c.base_url}``." if c.base_url else f"base_url: Required; defaults to ``{env_base}``.",
+            *(
+                f"{py}: Defaults to the ``{env}`` environment variable."
+                for a in c.auth
+                for py, env in a.params
+            ),
+            f"base_url: Defaults to ``{env_base}``, then ``{c.base_url}``."
+            if c.base_url
+            else f"base_url: Required; defaults to ``{env_base}``.",
             "auth: A custom ``httpx2.Auth``; overrides the credentials above.",
             "timeout: Seconds (or an ``httpx2.Timeout``) per request.",
             "max_retries: Retries for connection errors, 408/409/429 and 5xx.",
@@ -153,13 +245,30 @@ class _ClientEmitter:
             "http_client: Bring your own ``httpx2`` client (proxies, mTLS, pooling).",
             "transport: A custom transport, e.g. ``httpx2.MockTransport`` in tests.",
         ]
-        body.append(doc_expr(docstring(f"Create a client for the {c.api_name}.", "Args:\n" + "\n".join("    " + d for d in arg_docs), indent=8) or ""))
+        body.append(
+            doc_expr(
+                docstring(
+                    f"Create a client for the {c.api_name}.",
+                    "Args:\n" + "\n".join("    " + d for d in arg_docs),
+                    indent=8,
+                )
+                or ""
+            )
+        )
         body.append(ast.Assign([ast.Name("resolved_base_url")], base_value))
         if not c.base_url:
             body.append(
                 ast.If(
                     ast.UnaryOp(ast.Not(), ast.Name("resolved_base_url")),
-                    [ast.Raise(call("ValueError", const(f"base_url is required (or set {env_base})")), None)],
+                    [
+                        ast.Raise(
+                            call(
+                                "ValueError",
+                                const(f"base_url is required (or set {env_base})"),
+                            ),
+                            None,
+                        )
+                    ],
                     [],
                 )
             )
@@ -178,24 +287,46 @@ class _ClientEmitter:
         }
         if c.idempotency_header:
             super_kwargs["idempotency_header"] = const(c.idempotency_header)
-        body.append(ast.Expr(call(ast.Attribute(call("super"), "__init__"), **super_kwargs)))
+        body.append(
+            ast.Expr(call(ast.Attribute(call("super"), "__init__"), **super_kwargs))
+        )
         return ast.FunctionDef(
             name="__init__",
-            args=ast.arguments(posonlyargs=[], args=[arg("self")], vararg=None, kwonlyargs=kwonly, kw_defaults=defaults, kwarg=None, defaults=[]),
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[arg("self")],
+                vararg=None,
+                kwonlyargs=kwonly,
+                kw_defaults=defaults,
+                kwarg=None,
+                defaults=[],
+            ),
             body=body,
             decorator_list=[],
             returns=const(None),
             type_params=[],
         )
 
-    def cached(self, name: str, returns: ast.expr, value: ast.expr, doc: str | None = None) -> ast.FunctionDef:
+    def cached(
+        self, name: str, returns: ast.expr, value: ast.expr, doc: str | None = None
+    ) -> ast.FunctionDef:
         body: list[ast.stmt] = [doc_expr(doc)] if doc else []
         body.append(ast.Return(value))
         return ast.FunctionDef(
             name=name,
-            args=ast.arguments(posonlyargs=[], args=[arg("self")], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[arg("self")],
+                vararg=None,
+                kwonlyargs=[],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[],
+            ),
             body=body,
-            decorator_list=[ast.Name(self.imports.name("functools", "cached_property"))],
+            decorator_list=[
+                ast.Name(self.imports.name("functools", "cached_property"))
+            ],
             returns=returns,
             type_params=[],
         )
@@ -204,16 +335,25 @@ class _ClientEmitter:
         c = self.client
         name = f"Async{c.class_name}"
         body: list[ast.stmt] = []
-        doc = docstring(f"Client for the {c.api_name} (version {c.version}).", c.description)
+        doc = docstring(
+            f"Client for the {c.api_name} (version {c.version}).", c.description
+        )
         if doc:
             body.append(doc_expr(doc))
         body.append(ast.Assign([ast.Name("_package")], const(c.package)))
-        body.append(ast.Assign([ast.Name("_version")], ast.Name(self.imports.name("._version", "__version__"))))
+        body.append(
+            ast.Assign(
+                [ast.Name("_version")],
+                ast.Name(self.imports.name("._version", "__version__")),
+            )
+        )
         body.append(self.init())
         for r in self.plan.resources:
             self.resource_import(r)
             klass = f"Async{r.custom[1]}" if r.custom else f"Async{r.class_name}"
-            body.append(self.cached(r.attr, ast.Name(klass), call(klass, ast.Name("self"))))
+            body.append(
+                self.cached(r.attr, ast.Name(klass), call(klass, ast.Name("self")))
+            )
         raw = f"Async{c.class_name}WithRawResponse"
         body.append(
             self.cached(
@@ -223,15 +363,34 @@ class _ClientEmitter:
                 "Same resources, but methods return ``APIResponse`` (status, headers, ``parse()``).",
             )
         )
-        return ast.ClassDef(name=name, bases=[self.rt("AsyncAPIClient")], keywords=[], body=body, decorator_list=[], type_params=[])
+        return ast.ClassDef(
+            name=name,
+            bases=[self.rt("AsyncAPIClient")],
+            keywords=[],
+            body=body,
+            decorator_list=[],
+            type_params=[],
+        )
 
     def raw_class(self) -> ast.ClassDef:
         c = self.client
         name = f"Async{c.class_name}WithRawResponse"
         init = ast.FunctionDef(
             name="__init__",
-            args=ast.arguments(posonlyargs=[], args=[arg("self"), arg("client", ast.Name(f"Async{c.class_name}"))], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
-            body=[ast.Assign([ast.Attribute(ast.Name("self"), "_client")], ast.Name("client"))],
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[arg("self"), arg("client", ast.Name(f"Async{c.class_name}"))],
+                vararg=None,
+                kwonlyargs=[],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[],
+            ),
+            body=[
+                ast.Assign(
+                    [ast.Attribute(ast.Name("self"), "_client")], ast.Name("client")
+                )
+            ],
             decorator_list=[],
             returns=const(None),
             type_params=[],
@@ -241,9 +400,25 @@ class _ClientEmitter:
             self.resource_import(r, raw=True)
             klass = f"Async{r.class_name}WithRawResponse"
             body.append(
-                self.cached(r.attr, ast.Name(klass), call(klass, ast.Attribute(ast.Attribute(ast.Name("self"), "_client"), r.attr)))
+                self.cached(
+                    r.attr,
+                    ast.Name(klass),
+                    call(
+                        klass,
+                        ast.Attribute(
+                            ast.Attribute(ast.Name("self"), "_client"), r.attr
+                        ),
+                    ),
+                )
             )
-        return ast.ClassDef(name=name, bases=[], keywords=[], body=body, decorator_list=[], type_params=[])
+        return ast.ClassDef(
+            name=name,
+            bases=[],
+            keywords=[],
+            body=body,
+            decorator_list=[],
+            type_params=[],
+        )
 
     def module(self) -> ast.Module:
         async_client = self.client_class()

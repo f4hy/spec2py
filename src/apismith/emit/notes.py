@@ -17,26 +17,46 @@ def render_notes(plan: Plan) -> str:
         "## Client",
         "",
         f"- Class: `{c.class_name}` / `Async{c.class_name}`",
-        f"- Base URL: `{c.base_url}`" if c.base_url else f"- Base URL: required (`{c.env_prefix}_BASE_URL`)",
+        f"- Base URL: `{c.base_url}`"
+        if c.base_url
+        else f"- Base URL: required (`{c.env_prefix}_BASE_URL`)",
     ]
     for auth in c.auth:
         params = ", ".join(f"`{py}` (`{env}`)" for py, env in auth.params)
         lines.append(f"- Auth `{auth.scheme}` ({auth.kind}): {params}")
     if c.idempotency_header:
-        lines.append(f"- Idempotency header: `{c.idempotency_header}` (retried POSTs reuse one key)")
+        lines.append(
+            f"- Idempotency header: `{c.idempotency_header}` (retried POSTs reuse one key)"
+        )
 
     paginated = [(r, m) for r in plan.resources for m in r.methods if m.pagination]
     streams = [(r, m) for r in plan.resources for m in r.methods if m.stream]
     if paginated:
-        lines += ["", "## Pagination", "", "| Method | Strategy | Detected from |", "| --- | --- | --- |"]
+        lines += [
+            "",
+            "## Pagination",
+            "",
+            "| Method | Strategy | Detected from |",
+            "| --- | --- | --- |",
+        ]
         for r, m in paginated:
             assert m.pagination is not None
-            lines.append(f"| `{r.attr}.{m.name}` | {m.pagination.strategy} | {m.pagination.reason} |")
+            lines.append(
+                f"| `{r.attr}.{m.name}` | {m.pagination.strategy} | {m.pagination.reason} |"
+            )
     if streams:
-        lines += ["", "## Streaming", "", "| Method | Format | Event type |", "| --- | --- | --- |"]
+        lines += [
+            "",
+            "## Streaming",
+            "",
+            "| Method | Format | Event type |",
+            "| --- | --- | --- |",
+        ]
         for r, m in streams:
             assert m.stream is not None
-            lines.append(f"| `{r.attr}.{m.name}` | {m.stream.format} | `{m.stream.event_type.render()}` |")
+            lines.append(
+                f"| `{r.attr}.{m.name}` | {m.stream.format} | `{m.stream.event_type.render()}` |"
+            )
     lines += ["", "## Approximations", ""]
     if plan.notes:
         lines += [f"- {note}" for note in plan.notes]

@@ -35,7 +35,13 @@ from typing import Any, Literal, cast
 
 from .loader import is_url
 
-__all__ = ["Config", "ConfigError", "OperationConfig", "PaginationConfig", "load_config"]
+__all__ = [
+    "Config",
+    "ConfigError",
+    "OperationConfig",
+    "PaginationConfig",
+    "load_config",
+]
 
 type PaginationStyle = Literal["cursor", "offset", "page", "link"]
 
@@ -100,7 +106,9 @@ class Config:
     def replace(self, **changes: Any) -> Config:
         return dataclasses.replace(self, **changes)
 
-    def operation(self, operation_id: str | None, method: str, path: str) -> OperationConfig:
+    def operation(
+        self, operation_id: str | None, method: str, path: str
+    ) -> OperationConfig:
         by_route = self.operations.get(f"{method.upper()} {path}")
         if by_route is not None:
             return by_route
@@ -132,7 +140,9 @@ def _pagination(raw: Any, where: str) -> PaginationConfig | Literal[False] | Non
     table = _snake(cast(dict[str, Any], raw))
     _check_keys(table, PaginationConfig, f"{where}.pagination")
     if table.get("style") not in ("cursor", "offset", "page", "link"):
-        raise ConfigError(f"{where}.pagination.style must be cursor, offset, page or link")
+        raise ConfigError(
+            f"{where}.pagination.style must be cursor, offset, page or link"
+        )
     return PaginationConfig(**table)
 
 

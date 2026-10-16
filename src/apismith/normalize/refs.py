@@ -19,7 +19,18 @@ __all__ = ["RefError", "bundle", "resolve_pointer", "unescape_pointer"]
 type JSON = Any
 
 _SCHEMA_HINTS = frozenset(
-    {"type", "properties", "allOf", "oneOf", "anyOf", "items", "enum", "$ref", "additionalProperties", "const"}
+    {
+        "type",
+        "properties",
+        "allOf",
+        "oneOf",
+        "anyOf",
+        "items",
+        "enum",
+        "$ref",
+        "additionalProperties",
+        "const",
+    }
 )
 
 
@@ -40,7 +51,11 @@ def resolve_pointer(document: JSON, pointer: str) -> JSON:
         token = unescape_pointer(raw)
         if isinstance(node, dict) and token in node:
             node = cast(dict[str, JSON], node)[token]
-        elif isinstance(node, list) and token.isdigit() and int(token) < len(cast(list[JSON], node)):
+        elif (
+            isinstance(node, list)
+            and token.isdigit()
+            and int(token) < len(cast(list[JSON], node))
+        ):
             node = cast(list[JSON], node)[int(token)]
         else:
             raise RefError(f"cannot resolve #{pointer}")
@@ -70,7 +85,11 @@ class _Bundler:
         return self.cache[uri]
 
     def name_for(self, uri: str, pointer: str) -> str:
-        base = pointer.rstrip("/").rsplit("/", 1)[-1] if pointer else pathlib.PurePosixPath(urllib.parse.urlparse(uri).path).stem
+        base = (
+            pointer.rstrip("/").rsplit("/", 1)[-1]
+            if pointer
+            else pathlib.PurePosixPath(urllib.parse.urlparse(uri).path).stem
+        )
         base = unescape_pointer(base) or "Schema"
         name, n = base, 2
         while name in self.schemas:
@@ -80,13 +99,19 @@ class _Bundler:
     def walk(self, node: JSON, base: str, *, external: bool) -> JSON:
         """Rewrite refs in ``node`` (from document ``base``) to be local to the root."""
         if isinstance(node, list):
-            return [self.walk(v, base, external=external) for v in cast(list[JSON], node)]
+            return [
+                self.walk(v, base, external=external) for v in cast(list[JSON], node)
+            ]
         if not isinstance(node, dict):
             return node
         d = cast(dict[str, JSON], node)
         ref = d.get("$ref")
         if isinstance(ref, str):
-            siblings = {k: self.walk(v, base, external=external) for k, v in d.items() if k != "$ref"}
+            siblings = {
+                k: self.walk(v, base, external=external)
+                for k, v in d.items()
+                if k != "$ref"
+            }
             local = self.ref(ref, base, external=external)
             if isinstance(local, dict) and "$ref" in local:
                 return {**cast(dict[str, JSON], local), **siblings}
@@ -110,9 +135,21 @@ class _Bundler:
             # A Swagger 2.0 document referenced from a converted one.
             legacy = pointer.replace("/components/schemas/", "/definitions/", 1)
             target = resolve_pointer(document, legacy)
-        is_schema = "/schemas/" in pointer or "/definitions/" in pointer or (
-            isinstance(target, dict) and bool(_SCHEMA_HINTS & set(cast(dict[str, JSON], target)))
-            and not pointer.startswith(("/paths", "/components/parameters", "/components/responses", "/components/requestBodies"))
+        is_schema = (
+            "/schemas/" in pointer
+            or "/definitions/" in pointer
+            or (
+                isinstance(target, dict)
+                and bool(_SCHEMA_HINTS & set(cast(dict[str, JSON], target)))
+                and not pointer.startswith(
+                    (
+                        "/paths",
+                        "/components/parameters",
+                        "/components/responses",
+                        "/components/requestBodies",
+                    )
+                )
+            )
         )
         if is_schema:
             name = self.name_for(uri, pointer)
@@ -152,7 +189,9 @@ def bundle(
             continue
         for name in list(cast(dict[str, JSON], entries)):
             value = cast(dict[str, JSON], entries)[name]
-            cast(dict[str, JSON], components[section])[name] = bundler.walk(value, base_uri, external=False)
+            cast(dict[str, JSON], components[section])[name] = bundler.walk(
+                value, base_uri, external=False
+            )
     return root
 
 

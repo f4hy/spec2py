@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Mapping
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
 
 from .ir import (
     API,
@@ -25,7 +25,17 @@ __all__ = ["build_ir"]
 type JSON = Any
 type Obj = dict[str, JSON]
 
-METHODS: Final = ("get", "put", "post", "delete", "options", "head", "patch", "trace", "query")
+METHODS: Final = (
+    "get",
+    "put",
+    "post",
+    "delete",
+    "options",
+    "head",
+    "patch",
+    "trace",
+    "query",
+)
 _IGNORED_HEADERS: Final = frozenset({"accept", "content-type", "authorization"})
 _PRIMITIVES: Final = {
     "string": Kind.STRING,
@@ -52,13 +62,13 @@ _STRUCTURAL: Final = frozenset(
 
 
 def _is_json(media: str) -> bool:
-    base = media.split(";")[0].strip().lower()
+    base = media.split(";", maxsplit=1)[0].strip().lower()
     return base == "application/json" or base.endswith("+json") or base == "*/*"
 
 
 def media_rank(media: str) -> int:
     """Lower is preferred when an operation offers several media types."""
-    base = media.split(";")[0].strip().lower()
+    base = media.split(";", maxsplit=1)[0].strip().lower()
     if base == "application/json":
         return 0
     if base.endswith("+json"):
@@ -67,7 +77,13 @@ def media_rank(media: str) -> int:
         return 2
     if base == "application/x-www-form-urlencoded":
         return 3
-    if base in ("text/event-stream", "application/x-ndjson", "application/jsonl", "application/json-seq", "application/stream+json"):
+    if base in (
+        "text/event-stream",
+        "application/x-ndjson",
+        "application/jsonl",
+        "application/json-seq",
+        "application/stream+json",
+    ):
         return 4
     if base == "application/octet-stream":
         return 5
@@ -120,7 +136,22 @@ class _Builder:
         if pointer in self.synthetic:
             return self.synthetic[pointer]
         tokens = [unescape_pointer(t) for t in pointer.strip("/").split("/")]
-        meaningful = [t for t in tokens if t not in ("components", "schemas", "properties", "content", "schema", "items", "paths", "responses", "application/json")]
+        meaningful = [
+            t
+            for t in tokens
+            if t
+            not in (
+                "components",
+                "schemas",
+                "properties",
+                "content",
+                "schema",
+                "items",
+                "paths",
+                "responses",
+                "application/json",
+            )
+        ]
         base = _pascal_tokens(*meaningful[-2:]) if meaningful else "Schema"
         name, n = base, 2
         while name in self.raw_schemas or name in self.synthetic.values():
@@ -135,7 +166,9 @@ class _Builder:
             return False
         node = cast(Obj, raw)
         if isinstance(node.get("$ref"), str) and len(node) == 1:
-            return self.is_object_component(self.component_name(node["$ref"]), depth + 1)
+            return self.is_object_component(
+                self.component_name(node["$ref"]), depth + 1
+            )
         if any(k in node for k in ("oneOf", "anyOf", "enum", "const", "items")):
             return False
         t = node.get("type")
@@ -159,7 +192,9 @@ class _Builder:
         if node is True or node is None:
             return Schema(Kind.ANY)
         if node is False:
-            return Schema(Kind.ANY, lossy=["`false` schema (nothing allowed) mapped to object"])
+            return Schema(
+                Kind.ANY, lossy=["`false` schema (nothing allowed) mapped to object"]
+            )
         if not isinstance(node, dict):
             return Schema(Kind.ANY)
         n = cast(Obj, node)
@@ -192,7 +227,11 @@ class _Builder:
             return ref
 
         raw_type = n.get("type")
-        types = [raw_type] if isinstance(raw_type, str) else list(cast(list[str], raw_type or []))
+        types = (
+            [raw_type]
+            if isinstance(raw_type, str)
+            else list(cast(list[str], raw_type or []))
+        )
         nullable = "null" in types
         types = [t for t in types if t != "null"]
 
@@ -204,7 +243,11 @@ class _Builder:
             values = cast(list[JSON], n["enum"])
             nullable = nullable or None in values
             members = [v for v in values if v is not None]
-            s = Schema(Kind.ENUM, values=members, format=types[0] if types else None) if members else Schema(Kind.NULL)
+            s = (
+                Schema(Kind.ENUM, values=members, format=types[0] if types else None)
+                if members
+                else Schema(Kind.NULL)
+            )
         elif "oneOf" in n or "anyOf" in n:
             s = self._union(n)
         elif "allOf" in n:
@@ -215,7 +258,13 @@ class _Builder:
                 union_kind="type",
                 variants=[self.schema({**n, "type": t}) for t in types],
             )
-        elif types == ["object"] or (not types and any(k in n for k in ("properties", "additionalProperties", "patternProperties"))):
+        elif types == ["object"] or (
+            not types
+            and any(
+                k in n
+                for k in ("properties", "additionalProperties", "patternProperties")
+            )
+        ):
             s = self._object(n)
         elif types == ["array"] or (not types and ("items" in n or "prefixItems" in n)):
             s = self._array(n)
@@ -223,7 +272,11 @@ class _Builder:
             s = Schema(_PRIMITIVES[types[0]], format=n.get("format"))
             if types[0] == "string" and s.format is None:
                 media = n.get("contentMediaType")
-                if isinstance(media, str) and not _is_json(media) and n.get("contentEncoding") is None:
+                if (
+                    isinstance(media, str)
+                    and not _is_json(media)
+                    and n.get("contentEncoding") is None
+                ):
                     s.format = "binary"
                 s.content_media_type = media if isinstance(media, str) else None
         elif not types and nullable:
@@ -237,7 +290,7 @@ class _Builder:
         return s
 
     def _union(self, n: Obj) -> Schema:
-        key = "oneOf" if "oneOf" in n else "anyOf"
+        key: Literal["oneOf", "anyOf"] = "oneOf" if "oneOf" in n else "anyOf"
         variants: list[Schema] = []
         nullable = False
         for v in cast(list[JSON], n[key]):
@@ -260,12 +313,20 @@ class _Builder:
         disc = n.get("discriminator")
         if isinstance(disc, dict) and isinstance(disc.get("propertyName"), str):
             mapping = {
-                str(value): self.component_name(target) if target.startswith("#") else target
-                for value, target in cast(dict[str, str], disc.get("mapping") or {}).items()
+                str(value): self.component_name(target)
+                if target.startswith("#")
+                else target
+                for value, target in cast(
+                    dict[str, str], disc.get("mapping") or {}
+                ).items()
             }
             if not mapping:
-                mapping = {v.ref: v.ref for v in variants if v.kind is Kind.REF and v.ref}
-            s.discriminator = Discriminator(property=disc["propertyName"], mapping=mapping)
+                mapping = {
+                    v.ref: v.ref for v in variants if v.kind is Kind.REF and v.ref
+                }
+            s.discriminator = Discriminator(
+                property=disc["propertyName"], mapping=mapping
+            )
         return s
 
     def _merge_into(self, variant: Schema, base: Schema) -> Schema:
@@ -275,7 +336,9 @@ class _Builder:
             return obj
         if variant.kind is Kind.OBJECT:
             names = {p.name for p in variant.properties}
-            variant.properties = [p for p in base.properties if p.name not in names] + variant.properties
+            variant.properties = [
+                p for p in base.properties if p.name not in names
+            ] + variant.properties
         return variant
 
     def _all_of(self, parts: list[JSON], n: Obj) -> Schema:
@@ -310,7 +373,11 @@ class _Builder:
                 obj.lossy.extend(built.lossy)
             elif built.kind is Kind.ANY:
                 continue
-            elif isinstance(part, dict) and "required" in part and len(cast(Obj, part)) == 1:
+            elif (
+                isinstance(part, dict)
+                and "required" in part
+                and len(cast(Obj, part)) == 1
+            ):
                 required.update(cast(list[str], cast(Obj, part)["required"]))
             else:
                 # allOf of non-objects (e.g. string + format): keep the most specific.
@@ -320,7 +387,9 @@ class _Builder:
             if prop.name in required:
                 prop.required = True
         if required - {p.name for p in obj.properties}:
-            obj.extensions["x-apismith-required-inherited"] = sorted(required - {p.name for p in obj.properties})
+            obj.extensions["x-apismith-required-inherited"] = sorted(
+                required - {p.name for p in obj.properties}
+            )
         if not obj.properties and len(obj.bases) == 1 and obj.additional is None:
             return Schema(Kind.REF, ref=obj.bases[0])
         return obj
@@ -335,26 +404,39 @@ class _Builder:
             if additional is None:
                 additional = True
         typed_additional = (
-            self.schema(additional) if isinstance(additional, dict) and additional else None
+            self.schema(additional)
+            if isinstance(additional, dict) and additional
+            else None
         )
         if not props:
             if "required" in n and required:
                 obj = Schema(Kind.OBJECT, lossy=lossy)
-                obj.properties = [Property(name, Schema(Kind.ANY), True) for name in sorted(required)]
+                obj.properties = [
+                    Property(name, Schema(Kind.ANY), True) for name in sorted(required)
+                ]
                 obj.additional = typed_additional
                 return obj
-            return Schema(Kind.MAP, additional=typed_additional or Schema(Kind.ANY), lossy=lossy)
+            return Schema(
+                Kind.MAP, additional=typed_additional or Schema(Kind.ANY), lossy=lossy
+            )
         obj = Schema(Kind.OBJECT, lossy=lossy, additional=typed_additional)
         obj.properties = [
-            Property(name, self.schema(value), name in required) for name, value in props.items()
+            Property(name, self.schema(value), name in required)
+            for name, value in props.items()
         ]
         return obj
 
     def _array(self, n: Obj) -> Schema:
         if "prefixItems" in n:
             prefix = [self.schema(v) for v in cast(list[JSON], n["prefixItems"])]
-            items = prefix[0] if len(prefix) == 1 else Schema(Kind.UNION, variants=prefix, union_kind="anyOf")
-            return Schema(Kind.ARRAY, items=items, lossy=["tuple (prefixItems) mapped to a list"])
+            items = (
+                prefix[0]
+                if len(prefix) == 1
+                else Schema(Kind.UNION, variants=prefix, union_kind="anyOf")
+            )
+            return Schema(
+                Kind.ARRAY, items=items, lossy=["tuple (prefixItems) mapped to a list"]
+            )
         return Schema(Kind.ARRAY, items=self.schema(n.get("items", True)))
 
     # -- operations --------------------------------------------------------------
@@ -363,7 +445,9 @@ class _Builder:
         p = cast(Obj, self.deref(raw))
         location = p.get("in")
         name = p.get("name")
-        if location not in ("path", "query", "header", "cookie") or not isinstance(name, str):
+        if location not in ("path", "query", "header", "cookie") or not isinstance(
+            name, str
+        ):
             return None
         if location == "header" and name.lower() in _IGNORED_HEADERS:
             return None
@@ -396,7 +480,10 @@ class _Builder:
         media_obj = cast(Obj, content[media] or {})
         schema = self.schema(media_obj.get("schema", True))
         if media.startswith("application/octet-stream") or (
-            not _is_json(media) and not media.startswith(("multipart/", "application/x-www-form-urlencoded", "text/"))
+            not _is_json(media)
+            and not media.startswith(
+                ("multipart/", "application/x-www-form-urlencoded", "text/")
+            )
         ):
             schema = Schema(Kind.STRING, format="binary")
         return RequestBody(
@@ -428,17 +515,27 @@ class _Builder:
                         response.item_schema = self.schema(other_obj["itemSchema"])
         for name, header in cast(Obj, r.get("headers") or {}).items():
             h = cast(Obj, self.deref(header))
-            response.headers[name.lower()] = self.schema(h.get("schema", {"type": "string"}))
+            response.headers[name.lower()] = self.schema(
+                h.get("schema", {"type": "string"})
+            )
         return response
 
     def operations(self) -> None:
         paths = cast(Obj, self.doc.get("paths") or {})
         for path, raw_item in paths.items():
-            item = cast(Obj, self.deref(raw_item))
-            if not isinstance(item, dict):
+            resolved = self.deref(raw_item)
+            if not isinstance(resolved, dict):
                 continue
-            shared = [self.parameter(p) for p in cast(list[JSON], item.get("parameters") or [])]
-            ops: list[tuple[str, Obj]] = [(m, cast(Obj, item[m])) for m in METHODS if isinstance(item.get(m), dict)]
+            item = cast(Obj, resolved)
+            shared = [
+                self.parameter(p)
+                for p in cast(list[JSON], item.get("parameters") or [])
+            ]
+            ops: list[tuple[str, Obj]] = [
+                (m, cast(Obj, item[m]))
+                for m in METHODS
+                if isinstance(item.get(m), dict)
+            ]
             for method, op in cast(Obj, item.get("additionalOperations") or {}).items():
                 ops.append((method.lower(), cast(Obj, op)))
             for method, op in ops:
@@ -462,9 +559,13 @@ class _Builder:
                     description=op.get("description") or item.get("description"),
                     deprecated=bool(op.get("deprecated")),
                     parameters=list(params.values()),
-                    request_body=self.request_body(op["requestBody"]) if "requestBody" in op else None,
+                    request_body=self.request_body(op["requestBody"])
+                    if "requestBody" in op
+                    else None,
                     responses=responses,
-                    security=cast(list[dict[str, list[str]]] | None, op.get("security")),
+                    security=cast(
+                        list[dict[str, list[str]]] | None, op.get("security")
+                    ),
                     extensions={k: v for k, v in op.items() if k.startswith("x-")},
                 )
                 self.api.operations.append(operation)
@@ -476,7 +577,9 @@ class _Builder:
             kind = s.get("type")
             if kind not in ("apiKey", "http", "oauth2", "openIdConnect", "mutualTLS"):
                 continue
-            scheme = SecurityScheme(name=name, type=kind, description=s.get("description"))
+            scheme = SecurityScheme(
+                name=name, type=kind, description=s.get("description")
+            )
             if kind == "apiKey":
                 scheme.location = s.get("in", "header")
                 scheme.parameter_name = s.get("name")
@@ -490,15 +593,21 @@ class _Builder:
                     scheme.token_url = scheme.token_url or f.get("tokenUrl")
                     scheme.scopes.extend(sorted(cast(Obj, f.get("scopes") or {})))
             self.api.security_schemes[name] = scheme
-        self.api.security = cast(list[dict[str, list[str]]], self.doc.get("security") or [])
+        self.api.security = cast(
+            list[dict[str, list[str]]], self.doc.get("security") or []
+        )
 
     def servers(self) -> None:
         for raw in cast(list[JSON], self.doc.get("servers") or []):
             server = cast(Obj, raw)
             url = str(server.get("url", ""))
-            for var, spec in cast(Mapping[str, Obj], server.get("variables") or {}).items():
+            for var, spec in cast(
+                Mapping[str, Obj], server.get("variables") or {}
+            ).items():
                 url = url.replace("{" + var + "}", str(spec.get("default", "")))
-            self.api.servers.append(Server(url=url, description=server.get("description")))
+            self.api.servers.append(
+                Server(url=url, description=server.get("description"))
+            )
 
     def build(self) -> API:
         self.servers()

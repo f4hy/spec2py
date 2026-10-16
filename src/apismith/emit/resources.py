@@ -4,7 +4,7 @@ import ast
 import builtins
 from typing import Any
 
-from ..plan import RUNTIME, PMethod, PParam, Plan, PResource
+from ..plan import RUNTIME, Plan, PMethod, PParam, PResource
 from .pyast import (
     MODELS,
     Imports,
@@ -27,10 +27,23 @@ __all__ = ["emit_resource", "resource_class_names"]
 _NOT_GIVEN = TName("NotGiven", RUNTIME)
 _BUILTIN_NAMES = frozenset(dir(builtins))
 _RUNTIME_NAMES = (
-    "NOT_GIVEN", "NotGiven", "Headers", "Query", "Body", "TimeoutTypes", "FileTypes",
-    "AsyncAPIResource", "AsyncPaginator", "AsyncStreamManager", "build_body",
-    "path_template", "async_to_raw_response_wrapper", "CursorPagination",
-    "OffsetPagination", "PageNumberPagination", "LinkHeaderPagination",
+    "NOT_GIVEN",
+    "NotGiven",
+    "Headers",
+    "Query",
+    "Body",
+    "TimeoutTypes",
+    "FileTypes",
+    "AsyncAPIResource",
+    "AsyncPaginator",
+    "AsyncStreamManager",
+    "build_body",
+    "path_template",
+    "async_to_raw_response_wrapper",
+    "CursorPagination",
+    "OffsetPagination",
+    "PageNumberPagination",
+    "LinkHeaderPagination",
 )
 
 
@@ -73,8 +86,12 @@ class _ResourceEmitter:
         """An expression usable as ``cast_to``/``item_type`` (``type[T]``)."""
         if isinstance(t, TNone):
             return ast.Name(self.imports.name("types", "NoneType"))
-        is_class = (isinstance(t, TName) and not (t.module == MODELS and t.name in self.aliases)) or (
-            isinstance(t, TSub) and isinstance(t.base, TName) and t.base.name in ("list", "dict")
+        is_class = (
+            isinstance(t, TName) and not (t.module == MODELS and t.name in self.aliases)
+        ) or (
+            isinstance(t, TSub)
+            and isinstance(t.base, TName)
+            and t.base.name in ("list", "dict")
             and not any(self._needs_cast(a) for a in t.args)
         )
         if is_class:
@@ -101,7 +118,11 @@ class _ResourceEmitter:
         return self.ann(TUnion.of(t, _NOT_GIVEN)), self.rt("NOT_GIVEN")
 
     def arguments(self, method: PMethod) -> ast.arguments:
-        posonly = [arg(p.py_name, self.ann(p.type)) for p in method.params if p.location == "path"]
+        posonly = [
+            arg(p.py_name, self.ann(p.type))
+            for p in method.params
+            if p.location == "path"
+        ]
         kwonly: list[ast.arg] = []
         defaults: list[ast.expr | None] = []
         others = [p for p in method.params if p.location != "path"]
@@ -110,14 +131,22 @@ class _ResourceEmitter:
             annotation, default = self.param_annotation(p)
             kwonly.append(arg(p.py_name, annotation))
             defaults.append(default)
-        for name, annotation, default in (
-            ("extra_headers", TUnion.of(TName("Headers", RUNTIME), TNone()), const(None)),
+        for name, extra_type, extra_default in (
+            (
+                "extra_headers",
+                TUnion.of(TName("Headers", RUNTIME), TNone()),
+                const(None),
+            ),
             ("extra_query", TUnion.of(TName("Query", RUNTIME), TNone()), const(None)),
             ("extra_body", TUnion.of(TName("Body", RUNTIME), TNone()), const(None)),
-            ("timeout", TUnion.of(TName("TimeoutTypes", RUNTIME), _NOT_GIVEN), self.rt("NOT_GIVEN")),
+            (
+                "timeout",
+                TUnion.of(TName("TimeoutTypes", RUNTIME), _NOT_GIVEN),
+                self.rt("NOT_GIVEN"),
+            ),
         ):
-            kwonly.append(arg(name, self.ann(annotation)))
-            defaults.append(default)
+            kwonly.append(arg(name, self.ann(extra_type)))
+            defaults.append(extra_default)
         return ast.arguments(
             posonlyargs=[arg("self"), *posonly] if posonly else [],
             args=[] if posonly else [arg("self")],
@@ -143,8 +172,15 @@ class _ResourceEmitter:
         elif method.kind == "stream":
             extra = "Use as a context manager; iterating it yields typed events."
         summary = (method.summary or "").strip() or None
-        description = method.description if method.description != method.summary else None
-        if summary is None and description and "\n" not in description.strip() and len(description) < 80:
+        description = (
+            method.description if method.description != method.summary else None
+        )
+        if (
+            summary is None
+            and description
+            and "\n" not in description.strip()
+            and len(description) < 80
+        ):
             summary, description = description.strip(), None
         if summary is None:
             summary = f"``{method.operation.key}``"
@@ -155,7 +191,9 @@ class _ResourceEmitter:
     # -- body ------------------------------------------------------------------
 
     def mapping(self, params: list[PParam], *, key: str = "wire") -> ast.Dict:
-        keys = [const(p.wire_name if key == "wire" else p.py_name) for p in params]
+        keys: list[ast.expr | None] = [
+            const(p.wire_name if key == "wire" else p.py_name) for p in params
+        ]
         return ast.Dict(keys, [ast.Name(p.py_name) for p in params])
 
     def request_kwargs(self, method: PMethod) -> list[ast.keyword]:
@@ -168,7 +206,10 @@ class _ResourceEmitter:
         if method.query_styles:
             kw["query_styles"] = ast.Dict(
                 [const(k) for k in method.query_styles],
-                [ast.Tuple([const(s), const(e)]) for s, e in method.query_styles.values()],
+                [
+                    ast.Tuple([const(s), const(e)])
+                    for s, e in method.query_styles.values()
+                ],
             )
         if headers := by_loc.get("header"):
             kw["headers"] = self.mapping(headers)
@@ -181,7 +222,9 @@ class _ResourceEmitter:
                 for k, v in method.fixed_body.items():
                     fields.keys.append(const(k))
                     fields.values.append(const(v))
-                kw["body"] = call(self.rt("build_body"), self.ann(method.body_model), fields)
+                kw["body"] = call(
+                    self.rt("build_body"), self.ann(method.body_model), fields
+                )
             case "whole":
                 (body,) = by_loc["body"]
                 kw["body"] = ast.Name(body.py_name)
@@ -200,13 +243,24 @@ class _ResourceEmitter:
                 kw["content"] = value
             case "none":
                 pass
-        ct = method.content_type or (method.operation.request_body.media_type if method.operation.request_body else None)
-        if ct and method.body_mode in ("flat", "whole", "content") and ct != "application/json":
+        ct = method.content_type or (
+            method.operation.request_body.media_type
+            if method.operation.request_body
+            else None
+        )
+        if (
+            ct
+            and method.body_mode in ("flat", "whole", "content")
+            and ct != "application/json"
+        ):
             kw["content_type"] = const(ct)
         if not method.security:
             kw["security"] = const(False)
         if method.errors:
-            kw["errors"] = ast.Dict([const(k) for k, _ in method.errors], [self.cast_value(t) for _, t in method.errors])
+            kw["errors"] = ast.Dict(
+                [const(k) for k, _ in method.errors],
+                [self.cast_value(t) for _, t in method.errors],
+            )
         for name in ("extra_headers", "extra_query", "extra_body", "timeout"):
             kw[name] = ast.Name(name)
         return [ast.keyword(k, v) for k, v in kw.items()]
@@ -233,13 +287,18 @@ class _ResourceEmitter:
         path = self.path_expr(method)
         kwargs = self.request_kwargs(method)
         is_async = False
+        returns: TypeExpr
         match method.kind:
             case "paginated":
                 assert method.pagination is not None
                 pg = method.pagination
-                strategy = call(self.rt(pg.strategy), **{k: const(v) for k, v in pg.options.items()})
+                strategy = call(
+                    self.rt(pg.strategy), **{k: const(v) for k, v in pg.options.items()}
+                )
                 value: ast.expr = call(
-                    ast.Attribute(ast.Attribute(ast.Name("self"), "_client"), "get_api_list"),
+                    ast.Attribute(
+                        ast.Attribute(ast.Name("self"), "_client"), "get_api_list"
+                    ),
                     verb,
                     path,
                     item_type=self.cast_target(pg.item_type),
@@ -259,7 +318,11 @@ class _ResourceEmitter:
                 )
                 returns = TSub(TName("AsyncStreamManager", RUNTIME), (st.event_type,))
             case _:
-                value = ast.Await(call(client, verb, path, cast_to=self.cast_target(method.return_type)))
+                value = ast.Await(
+                    call(
+                        client, verb, path, cast_to=self.cast_target(method.return_type)
+                    )
+                )
                 returns = method.return_type
                 is_async = True
         assert isinstance(value, ast.Call | ast.Await)
@@ -272,8 +335,15 @@ class _ResourceEmitter:
         body.append(ast.Return(value))
         decorators: list[ast.expr] = []
         if method.deprecated:
-            message = " ".join((method.description or "This operation is deprecated.").split())
-            decorators.append(call(ast.Name(self.imports.name("warnings", "deprecated")), const(message)))
+            message = " ".join(
+                (method.description or "This operation is deprecated.").split()
+            )
+            decorators.append(
+                call(
+                    ast.Name(self.imports.name("warnings", "deprecated")),
+                    const(message),
+                )
+            )
         fields: dict[str, Any] = {
             "name": method.name,
             "args": self.arguments(method),
@@ -286,10 +356,17 @@ class _ResourceEmitter:
 
     def resource_class(self) -> ast.ClassDef:
         name = f"Async{self.resource.class_name}"
-        body: list[ast.stmt] = [doc_expr(f"Operations on {self.resource.attr.replace('_', ' ')}.")]
+        body: list[ast.stmt] = [
+            doc_expr(f"Operations on {self.resource.attr.replace('_', ' ')}.")
+        ]
         body.extend(self.method(m) for m in self.resource.methods)
         return ast.ClassDef(
-            name=name, bases=[self.rt("AsyncAPIResource")], keywords=[], body=body, decorator_list=[], type_params=[]
+            name=name,
+            bases=[self.rt("AsyncAPIResource")],
+            keywords=[],
+            body=body,
+            decorator_list=[],
+            type_params=[],
         )
 
     def raw_class(self) -> ast.ClassDef:
@@ -302,14 +379,25 @@ class _ResourceEmitter:
             init_body.append(
                 ast.Assign(
                     [ast.Attribute(ast.Name("self"), m.name)],
-                    call(self.rt("async_to_raw_response_wrapper"), ast.Attribute(ast.Name("resource"), m.name)),
+                    call(
+                        self.rt("async_to_raw_response_wrapper"),
+                        ast.Attribute(ast.Name("resource"), m.name),
+                    ),
                 )
             )
         if not init_body:
             init_body.append(ast.Pass())
         init = ast.FunctionDef(
             name="__init__",
-            args=ast.arguments(posonlyargs=[], args=[arg("self"), arg("resource", ast.Name(resource_type))], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[arg("self"), arg("resource", ast.Name(resource_type))],
+                vararg=None,
+                kwonlyargs=[],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[],
+            ),
             body=init_body,
             decorator_list=[],
             returns=ast.Constant(None),
@@ -320,7 +408,14 @@ class _ResourceEmitter:
             "    headers and a lazy ``parse()``. Paginated and streaming methods are omitted\n"
             "    (their pages and streams already expose ``.response``), as are deprecated ones.\n    "
         )
-        return ast.ClassDef(name=name, bases=[], keywords=[], body=[doc, init], decorator_list=[], type_params=[])
+        return ast.ClassDef(
+            name=name,
+            bases=[],
+            keywords=[],
+            body=[doc, init],
+            decorator_list=[],
+            type_params=[],
+        )
 
     def module(self) -> ast.Module:
         async_cls = self.resource_class()

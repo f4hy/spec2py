@@ -16,7 +16,10 @@ type JSON = Any
 def _upgrade_schema(node: dict[str, JSON]) -> dict[str, JSON]:
     s = dict(node)
     nullable = s.pop("nullable", None)
-    for bound, limit in (("exclusiveMinimum", "minimum"), ("exclusiveMaximum", "maximum")):
+    for bound, limit in (
+        ("exclusiveMinimum", "minimum"),
+        ("exclusiveMaximum", "maximum"),
+    ):
         if isinstance(s.get(bound), bool):
             if s[bound] and limit in s:
                 s[bound] = s.pop(limit)
@@ -32,7 +35,19 @@ def _upgrade_schema(node: dict[str, JSON]) -> dict[str, JSON]:
             if "null" not in t:
                 s["type"] = [*cast(list[str], t), "null"]
         else:
-            keep = {k: v for k, v in s.items() if k in ("description", "title", "default", "deprecated", "readOnly", "writeOnly")}
+            keep = {
+                k: v
+                for k, v in s.items()
+                if k
+                in (
+                    "description",
+                    "title",
+                    "default",
+                    "deprecated",
+                    "readOnly",
+                    "writeOnly",
+                )
+            }
             inner = {k: v for k, v in s.items() if k not in keep}
             s = {**keep, "anyOf": [inner, {"type": "null"}]}
     return s

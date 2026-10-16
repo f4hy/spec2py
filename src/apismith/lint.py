@@ -54,10 +54,14 @@ class LintReport:
             shown = f.locations if verbose else f.locations[:5]
             lines.extend(f"       {loc}" for loc in shown)
             if len(f.locations) > len(shown):
-                lines.append(f"       ... and {len(f.locations) - len(shown)} more (--verbose)")
+                lines.append(
+                    f"       ... and {len(f.locations) - len(shown)} more (--verbose)"
+                )
         fixable = sum(1 for f in self.findings if f.fix)
         if fixable:
-            lines.append(f"\n{fixable} finding(s) can be fixed mechanically: apismith lint --fix-overlay fixes.yaml")
+            lines.append(
+                f"\n{fixable} finding(s) can be fixed mechanically: apismith lint --fix-overlay fixes.yaml"
+            )
         return "\n".join(lines)
 
     def to_json(self) -> str:
@@ -151,7 +155,14 @@ def _common_tag(api: API, s: Schema) -> str | None:
 def lint(api: API) -> LintReport:
     findings: dict[str, Finding] = {}
 
-    def add(code: str, severity: Severity, message: str, consequence: str, location: str, fix: dict[str, Any] | None = None) -> None:
+    def add(
+        code: str,
+        severity: Severity,
+        message: str,
+        consequence: str,
+        location: str,
+        fix: dict[str, Any] | None = None,
+    ) -> None:
         f = findings.setdefault(code, Finding(code, severity, message, consequence))
         if location not in f.locations:
             f.locations.append(location)
@@ -168,37 +179,101 @@ def lint(api: API) -> LintReport:
                 "operations have no operationId",
                 "method names are derived from the HTTP method and path",
                 op.key,
-                {"target": target, "update": {"operationId": _derived_operation_id(op)}},
+                {
+                    "target": target,
+                    "update": {"operationId": _derived_operation_id(op)},
+                },
             )
         elif op.operation_id in seen_ids:
-            add("duplicate-operation-id", "error", "operationIds are not unique", "later duplicates get a numeric suffix", f"{op.key} (also {seen_ids[op.operation_id]})")
+            add(
+                "duplicate-operation-id",
+                "error",
+                "operationIds are not unique",
+                "later duplicates get a numeric suffix",
+                f"{op.key} (also {seen_ids[op.operation_id]})",
+            )
         else:
             seen_ids[op.operation_id] = op.key
         if not op.tags:
-            add("missing-tags", "info", "operations have no tags", "they are grouped into resources by their first path segment", op.key)
+            add(
+                "missing-tags",
+                "info",
+                "operations have no tags",
+                "they are grouped into resources by their first path segment",
+                op.key,
+            )
         success = [r for r in op.responses if r.is_success]
         if not success:
-            add("no-success-response", "warning", "operations declare no 2xx response", "their methods return None", op.key)
-        elif all(r.schema is None and r.media_type and media_rank(r.media_type) <= 1 for r in success if r.media_type):
-            if any(r.media_type for r in success):
-                add("untyped-response", "warning", "JSON responses have no schema", "their methods return `object`", op.key)
+            add(
+                "no-success-response",
+                "warning",
+                "operations declare no 2xx response",
+                "their methods return None",
+                op.key,
+            )
+        elif any(r.media_type for r in success) and all(
+            r.schema is None and r.media_type and media_rank(r.media_type) <= 1
+            for r in success
+            if r.media_type
+        ):
+            add(
+                "untyped-response",
+                "warning",
+                "JSON responses have no schema",
+                "their methods return `object`",
+                op.key,
+            )
         if not any(not r.is_success for r in op.responses):
-            add("no-error-responses", "info", "operations declare no error responses", "errors raise typed exceptions, but bodies are not parsed into models", op.key)
-        if op.request_body and media_rank(op.request_body.media_type) <= 1 and op.request_body.schema.kind is Kind.ANY:
-            add("untyped-request-body", "warning", "request bodies have no schema", "the body is accepted as `object` without validation", op.key)
+            add(
+                "no-error-responses",
+                "info",
+                "operations declare no error responses",
+                "errors raise typed exceptions, but bodies are not parsed into models",
+                op.key,
+            )
+        if (
+            op.request_body
+            and media_rank(op.request_body.media_type) <= 1
+            and op.request_body.schema.kind is Kind.ANY
+        ):
+            add(
+                "untyped-request-body",
+                "warning",
+                "request bodies have no schema",
+                "the body is accepted as `object` without validation",
+                op.key,
+            )
         for p in op.parameters:
             if p.schema.lossy:
-                add("content-parameter", "info", "parameters use `content` instead of `schema`", "they are sent as plain text", f"{op.key} {p.name}")
+                add(
+                    "content-parameter",
+                    "info",
+                    "parameters use `content` instead of `schema`",
+                    "they are sent as plain text",
+                    f"{op.key} {p.name}",
+                )
 
     for where, s in _schemas_in(api):
-        if s.kind is Kind.UNION and s.union_kind in ("oneOf", "anyOf") and s.discriminator is None:
+        if (
+            s.kind is Kind.UNION
+            and s.union_kind in ("oneOf", "anyOf")
+            and s.discriminator is None
+        ):
             models = [v for v in s.variants if api.resolve(v).kind is Kind.OBJECT]
             if len(models) > 1:
                 tag = _common_tag(api, s)
                 fix = None
-                if tag and where.startswith("#/components/schemas/") and "." not in where and "|" not in where:
+                if (
+                    tag
+                    and where.startswith("#/components/schemas/")
+                    and "." not in where
+                    and "|" not in where
+                ):
                     name = where.rsplit("/", 1)[-1]
-                    fix = {"target": f"$.components.schemas[{_jsonpath_key(name)}]", "update": {"discriminator": {"propertyName": tag}}}
+                    fix = {
+                        "target": f"$.components.schemas[{_jsonpath_key(name)}]",
+                        "update": {"discriminator": {"propertyName": tag}},
+                    }
                 add(
                     "union-without-discriminator",
                     "warning",
@@ -209,14 +284,34 @@ def lint(api: API) -> LintReport:
                 )
         for lossy in s.lossy:
             code = "untyped-schema" if lossy == "untyped schema" else "lossy-mapping"
-            consequence = "typed as `object`; add a schema with an Overlay" if code == "untyped-schema" else lossy
-            add(code, "info", "schemas map to Python lossily" if code == "lossy-mapping" else "schemas have no type", consequence, where)
+            consequence = (
+                "typed as `object`; add a schema with an Overlay"
+                if code == "untyped-schema"
+                else lossy
+            )
+            add(
+                code,
+                "info",
+                "schemas map to Python lossily"
+                if code == "lossy-mapping"
+                else "schemas have no type",
+                consequence,
+                where,
+            )
     inline_enums: dict[tuple[object, ...], list[str]] = defaultdict(list)
     for where, s in _schemas_in(api):
-        if s.kind is Kind.ENUM and not (where.startswith("#/components/schemas/") and "." not in where):
+        if s.kind is Kind.ENUM and not (
+            where.startswith("#/components/schemas/") and "." not in where
+        ):
             inline_enums[tuple(s.values)].append(where)
     for values, wheres in inline_enums.items():
         if len(wheres) > 1:
-            add("repeated-inline-enum", "info", "identical inline enums are repeated", "each gets its own type alias; a shared component would give one name", f"{list(values)!r}: {', '.join(wheres[:3])}")
+            add(
+                "repeated-inline-enum",
+                "info",
+                "identical inline enums are repeated",
+                "each gets its own type alias; a shared component would give one name",
+                f"{list(values)!r}: {', '.join(wheres[:3])}",
+            )
 
     return LintReport(list(findings.values()))

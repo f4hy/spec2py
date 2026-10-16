@@ -244,6 +244,14 @@ _FUNCTIONS: Final[dict[str, Callable[[Sequence[JSON]], JSON]]] = {
 }
 
 
+def _either(left: _Expr, right: _Expr) -> _Expr:
+    return lambda n, r: _truthy(left(n, r)) or _truthy(right(n, r))
+
+
+def _both(left: _Expr, right: _Expr) -> _Expr:
+    return lambda n, r: _truthy(left(n, r)) and _truthy(right(n, r))
+
+
 # -- parser ----------------------------------------------------------------------
 
 
@@ -288,12 +296,16 @@ class _Parser:
                 elif self.accept("*"):
                     segments.append((True, [_wildcard]))
                 else:
-                    segments.append((True, [_name_selector(self.take(kind="name").text)]))
+                    segments.append(
+                        (True, [_name_selector(self.take(kind="name").text)])
+                    )
             elif self.accept("."):
                 if self.accept("*"):
                     segments.append((False, [_wildcard]))
                 else:
-                    segments.append((False, [_name_selector(self.take(kind="name").text)]))
+                    segments.append(
+                        (False, [_name_selector(self.take(kind="name").text)])
+                    )
             elif self.tok.text == "[":
                 segments.append((False, self.parse_bracket()))
             else:
@@ -318,7 +330,9 @@ class _Parser:
             return _filter_selector(self.parse_or())
         if tok.kind == "number" or tok.text == ":":
             return self.parse_index_or_slice()
-        raise JSONPathError(f"bad selector {tok.text!r} at {tok.pos} in {self.source!r}")
+        raise JSONPathError(
+            f"bad selector {tok.text!r} at {tok.pos} in {self.source!r}"
+        )
 
     def parse_index_or_slice(self) -> _Selector:
         parts: list[int | None] = [None]
@@ -332,7 +346,7 @@ class _Parser:
                 parts.append(int(self.take(kind="number").text))
             else:
                 parts.append(None)
-        start, stop, step = (parts + [None, None])[:3]
+        start, stop, step = [*parts, None, None][:3]
         return _slice_selector(start, stop, step)
 
     # filter expressions
@@ -340,18 +354,14 @@ class _Parser:
         left = self.parse_and()
         while self.accept("||"):
             right = self.parse_and()
-            left = (lambda lft, rgt: lambda n, r: _truthy(lft(n, r)) or _truthy(rgt(n, r)))(
-                left, right
-            )
+            left = _either(left, right)
         return left
 
     def parse_and(self) -> _Expr:
         left = self.parse_not()
         while self.accept("&&"):
             right = self.parse_not()
-            left = (lambda lft, rgt: lambda n, r: _truthy(lft(n, r)) and _truthy(rgt(n, r)))(
-                left, right
-            )
+            left = _both(left, right)
         return left
 
     def parse_not(self) -> _Expr:
@@ -380,7 +390,9 @@ class _Parser:
             return lambda n, r: text
         if tok.kind == "number":
             self.i += 1
-            num: float | int = float(tok.text) if any(c in tok.text for c in ".eE") else int(tok.text)
+            num: float | int = (
+                float(tok.text) if any(c in tok.text for c in ".eE") else int(tok.text)
+            )
             return lambda n, r: num
         if tok.kind == "name" and tok.text in ("true", "false", "null"):
             self.i += 1

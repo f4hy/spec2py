@@ -18,7 +18,9 @@ from .pipeline import generate, load_api
 __all__ = ["scorecard"]
 
 
-def scorecard(source: str, config: Config, *, typecheck: bool = False) -> dict[str, Any]:
+def scorecard(
+    source: str, config: Config, *, typecheck: bool = False
+) -> dict[str, Any]:
     pipeline = load_api(source, config)
     plan = pipeline.plan
     methods = [m for r in plan.resources for m in r.methods]
@@ -40,7 +42,9 @@ def scorecard(source: str, config: Config, *, typecheck: bool = False) -> dict[s
             "models": len(plan.models),
             "files": len(py_files),
             "lines_of_code": loc,
-            "methods_with_docstrings": sum(1 for m in methods if m.summary or m.description),
+            "methods_with_docstrings": sum(
+                1 for m in methods if m.summary or m.description
+            ),
             "paginated_methods": sum(1 for m in methods if m.pagination),
             "streaming_methods": sum(1 for m in methods if m.stream),
             "approximations": len(plan.notes),
@@ -48,11 +52,22 @@ def scorecard(source: str, config: Config, *, typecheck: bool = False) -> dict[s
         if typecheck:
             target = package_dir(plan, out)
             result = subprocess.run(
-                [sys.executable, "-m", "mypy", "--strict", "--no-incremental", target.name],
+                [
+                    sys.executable,
+                    "-m",
+                    "mypy",
+                    "--strict",
+                    "--no-incremental",
+                    target.name,
+                ],
                 cwd=target.parent,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            card["mypy_strict"] = "pass" if result.returncode == 0 else result.stdout.strip().splitlines()[-1]
+            card["mypy_strict"] = (
+                "pass"
+                if result.returncode == 0
+                else result.stdout.strip().splitlines()[-1]
+            )
     return card

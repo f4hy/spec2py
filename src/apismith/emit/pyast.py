@@ -15,7 +15,7 @@ from typing import Any, Final
 try:  # Python 3.14 moved the unparser out of ast.py
     from _ast_unparse import Unparser as _StdUnparser  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover
-    _StdUnparser = ast._Unparser  # type: ignore[attr-defined]  # noqa: SLF001
+    _StdUnparser = ast._Unparser  # type: ignore[attr-defined]
 
 __all__ = [
     "MODELS",
@@ -39,7 +39,9 @@ MODELS: Final = "<models>"
 class Imports:
     """Collects ``from x import y`` statements and resolves local-name clashes."""
 
-    def __init__(self, *, package: str, here: str, reserved: Iterable[str] = ()) -> None:
+    def __init__(
+        self, *, package: str, here: str, reserved: Iterable[str] = ()
+    ) -> None:
         self.package = package
         self.here = here
         self._names: dict[tuple[str, str], str] = {}
@@ -104,7 +106,9 @@ class Imports:
         for module, aliases in sorted(grouped.items()):
             level = len(module) - len(module.lstrip("."))
             out.append(
-                ast.ImportFrom(module=module.lstrip(".") or None, names=aliases, level=level)
+                ast.ImportFrom(
+                    module=module.lstrip(".") or None, names=aliases, level=level
+                )
             )
         return out
 
@@ -177,7 +181,11 @@ class TUnion(TypeExpr):
                 if inner not in flat:
                     flat.append(inner)
         # None and NotGiven go last, as people write them.
-        flat.sort(key=lambda t: 2 if t == TName("NotGiven", "apismith_runtime") else int(t.is_none))
+        flat.sort(
+            key=lambda t: (
+                2 if t == TName("NotGiven", "apismith_runtime") else int(t.is_none)
+            )
+        )
         return flat[0] if len(flat) == 1 else TUnion(tuple(flat))
 
     def to_ast(self, imports: Imports) -> ast.expr:
@@ -196,8 +204,8 @@ class TLiteral(TypeExpr):
     values: tuple[Any, ...]
 
     def to_ast(self, imports: Imports) -> ast.expr:
-        consts = [ast.Constant(v) for v in self.values]
-        slice_: ast.expr = consts[0] if len(consts) == 1 else ast.Tuple(consts)
+        consts: list[ast.expr] = [ast.Constant(v) for v in self.values]
+        slice_ = consts[0] if len(consts) == 1 else ast.Tuple(consts)
         return ast.Subscript(ast.Name(imports.name("typing", "Literal")), slice_)
 
     def render(self) -> str:
@@ -230,7 +238,9 @@ class TAnnotated(TypeExpr):
 
     def to_ast(self, imports: Imports) -> ast.expr:
         elts = [self.inner.to_ast(imports), *(m.to_ast(imports) for m in self.metadata)]
-        return ast.Subscript(ast.Name(imports.name("typing", "Annotated")), ast.Tuple(elts))
+        return ast.Subscript(
+            ast.Name(imports.name("typing", "Annotated")), ast.Tuple(elts)
+        )
 
     def render(self) -> str:
         meta = ", ".join(m.render() for m in self.metadata)
@@ -252,10 +262,16 @@ def docstring(*paragraphs: str | None, indent: int = 4, width: int = 80) -> str 
             continue
         for block in para.strip().split("\n\n"):
             lines = block.splitlines()
-            if any(l.startswith(("  ", "- ", "* ", "|", "```")) for l in lines) or len(lines) > 1 and all(len(l) < 60 for l in lines):
-                out.append("\n".join(l.rstrip() for l in lines))
+            if any(
+                line.startswith(("  ", "- ", "* ", "|", "```")) for line in lines
+            ) or (len(lines) > 1 and all(len(line) < 60 for line in lines)):
+                out.append("\n".join(line.rstrip() for line in lines))
             else:
-                out.append(textwrap.fill(" ".join(l.strip() for l in lines), width=width - indent))
+                out.append(
+                    textwrap.fill(
+                        " ".join(line.strip() for line in lines), width=width - indent
+                    )
+                )
     if not out:
         return None
     text = "\n\n".join(out)
@@ -263,14 +279,18 @@ def docstring(*paragraphs: str | None, indent: int = 4, width: int = 80) -> str 
         return text
     pad = " " * indent
     lines = text.split("\n")
-    return "\n".join([lines[0], *(pad + l if l else l for l in lines[1:])]) + "\n" + pad
+    return (
+        "\n".join([lines[0], *(pad + line if line else line for line in lines[1:])])
+        + "\n"
+        + pad
+    )
 
 
 def doc_expr(text: str) -> ast.Expr:
     return ast.Expr(ast.Constant(text))
 
 
-class _Unparser(_StdUnparser):  # type: ignore[misc,valid-type]
+class _Unparser(_StdUnparser):  # type: ignore[misc]
     """Renders attribute docstrings (string statements after fields) triple-quoted."""
 
     def visit_Expr(self, node: ast.Expr) -> None:

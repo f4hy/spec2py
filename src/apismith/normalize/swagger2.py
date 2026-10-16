@@ -75,7 +75,11 @@ def _file_to_binary(schema: JSON) -> JSON:
     if isinstance(schema, dict):
         s = cast(dict[str, JSON], schema)
         if s.get("type") == "file":
-            return {**{k: v for k, v in s.items() if k != "type"}, "type": "string", "format": "binary"}
+            return {
+                **{k: v for k, v in s.items() if k != "type"},
+                "type": "string",
+                "format": "binary",
+            }
         return {k: _file_to_binary(v) for k, v in s.items()}
     if isinstance(schema, list):
         return [_file_to_binary(v) for v in cast(list[JSON], schema)]
@@ -83,7 +87,10 @@ def _file_to_binary(schema: JSON) -> JSON:
 
 
 def _param_schema(param: dict[str, JSON]) -> dict[str, JSON]:
-    return _file_to_binary({k: param[k] for k in _SCHEMA_KEYS if k in param})
+    return cast(
+        dict[str, JSON],
+        _file_to_binary({k: param[k] for k in _SCHEMA_KEYS if k in param}),
+    )
 
 
 def _convert_param(param: dict[str, JSON]) -> dict[str, JSON]:
@@ -120,10 +127,10 @@ def _form_body(params: list[dict[str, JSON]], consumes: list[str]) -> dict[str, 
         if has_file or "multipart/form-data" in consumes
         else "application/x-www-form-urlencoded"
     )
-    schema: dict[str, JSON] = {"type": "object", "properties": properties}
+    body: dict[str, JSON] = {"type": "object", "properties": properties}
     if required:
-        schema["required"] = required
-    return {"content": {media: {"schema": schema}}, "required": bool(required)}
+        body["required"] = required
+    return {"content": {media: {"schema": body}}, "required": bool(required)}
 
 
 def _convert_responses(
@@ -160,7 +167,11 @@ def _convert_responses(
 def _security_scheme(scheme: dict[str, JSON]) -> dict[str, JSON]:
     match scheme.get("type"):
         case "basic":
-            return {"type": "http", "scheme": "basic", "description": scheme.get("description", "")}
+            return {
+                "type": "http",
+                "scheme": "basic",
+                "description": scheme.get("description", ""),
+            }
         case "apiKey":
             return scheme
         case "oauth2":
@@ -189,7 +200,9 @@ def swagger2_to_openapi3(document: dict[str, JSON]) -> dict[str, JSON]:
     if host := src.get("host"):
         schemes = cast(list[str], src.get("schemes") or ["https"])
         base_path = src.get("basePath", "")
-        out["servers"] = [{"url": f"{scheme}://{host}{base_path}"} for scheme in schemes]
+        out["servers"] = [
+            {"url": f"{scheme}://{host}{base_path}"} for scheme in schemes
+        ]
     elif base_path := src.get("basePath"):
         out["servers"] = [{"url": base_path}]
     for key in ("tags", "security", "externalDocs"):
@@ -200,14 +213,20 @@ def swagger2_to_openapi3(document: dict[str, JSON]) -> dict[str, JSON]:
     components: dict[str, JSON] = {}
     if defs := src.get("definitions"):
         components["schemas"] = _file_to_binary(defs)
-    params = {n: _convert_param(p) for n, p in global_params.items() if p.get("in") not in ("body", "formData")}
+    params = {
+        n: _convert_param(p)
+        for n, p in global_params.items()
+        if p.get("in") not in ("body", "formData")
+    }
     if params:
         components["parameters"] = params
     request_bodies: dict[str, JSON] = {}
     for name, p in global_params.items():
         if p.get("in") == "body":
             request_bodies[name] = {
-                "content": {media: {"schema": p.get("schema", {})} for media in consumes_default},
+                "content": {
+                    media: {"schema": p.get("schema", {})} for media in consumes_default
+                },
                 "required": bool(p.get("required")),
                 "description": p.get("description", ""),
             }
@@ -217,15 +236,17 @@ def swagger2_to_openapi3(document: dict[str, JSON]) -> dict[str, JSON]:
         components["responses"] = _convert_responses(responses, produces_default)
     if sec := src.get("securityDefinitions"):
         components["securitySchemes"] = {
-            n: _security_scheme(s) for n, s in cast(dict[str, dict[str, JSON]], sec).items()
+            n: _security_scheme(s)
+            for n, s in cast(dict[str, dict[str, JSON]], sec).items()
         }
     if components:
         out["components"] = components
 
     paths: dict[str, JSON] = {}
-    for path, item in cast(dict[str, dict[str, JSON]], src.get("paths", {})).items():
-        if not isinstance(item, dict):
+    for path, raw_item in cast(dict[str, JSON], src.get("paths", {})).items():
+        if not isinstance(raw_item, dict):
             continue
+        item = cast(dict[str, JSON], raw_item)
         new_item: dict[str, JSON] = {}
         shared = cast(list[dict[str, JSON]], item.get("parameters", []))
         for method, op in item.items():
@@ -237,7 +258,10 @@ def swagger2_to_openapi3(document: dict[str, JSON]) -> dict[str, JSON]:
             consumes = cast(list[str], operation.get("consumes") or consumes_default)
             produces = cast(list[str], operation.get("produces") or produces_default)
             merged: dict[tuple[str, str], dict[str, JSON]] = {}
-            for p in [*shared, *cast(list[dict[str, JSON]], operation.get("parameters", []))]:
+            for p in [
+                *shared,
+                *cast(list[dict[str, JSON]], operation.get("parameters", [])),
+            ]:
                 resolved = p
                 if "$ref" in p:
                     ref = cast(str, p["$ref"])
@@ -246,20 +270,27 @@ def swagger2_to_openapi3(document: dict[str, JSON]) -> dict[str, JSON]:
                     if resolved.get("in") not in ("body", "formData"):
                         merged[(name, "$ref")] = p
                         continue
-                merged[(cast(str, resolved.get("name")), cast(str, resolved.get("in")))] = resolved
+                merged[
+                    (cast(str, resolved.get("name")), cast(str, resolved.get("in")))
+                ] = resolved
             new_op = {
                 k: v
                 for k, v in operation.items()
-                if k not in ("parameters", "consumes", "produces", "responses", "schemes")
+                if k
+                not in ("parameters", "consumes", "produces", "responses", "schemes")
             }
-            plain = [p for p in merged.values() if p.get("in") not in ("body", "formData")]
+            plain = [
+                p for p in merged.values() if p.get("in") not in ("body", "formData")
+            ]
             if plain:
                 new_op["parameters"] = [_convert_param(p) for p in plain]
             body = next((p for p in merged.values() if p.get("in") == "body"), None)
             form = [p for p in merged.values() if p.get("in") == "formData"]
             if body is not None:
                 new_op["requestBody"] = {
-                    "content": {media: {"schema": body.get("schema", {})} for media in consumes},
+                    "content": {
+                        media: {"schema": body.get("schema", {})} for media in consumes
+                    },
                     "required": bool(body.get("required")),
                 }
                 if body.get("description"):

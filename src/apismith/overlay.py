@@ -65,7 +65,9 @@ def apply_overlay(
     if "overlay" not in overlay:
         raise OverlayError("not an Overlay document: missing the 'overlay' field")
     report = OverlayReport()
-    for index, action in enumerate(cast(list[Mapping[str, JSON]], overlay.get("actions") or [])):
+    for index, action in enumerate(
+        cast(list[Mapping[str, JSON]], overlay.get("actions") or [])
+    ):
         target = action.get("target")
         if not isinstance(target, str):
             raise OverlayError(f"action {index} has no target")
@@ -78,7 +80,7 @@ def apply_overlay(
             continue
         if action.get("remove"):
             # Delete from the end so earlier list indices stay valid.
-            for loc in sorted(locations, key=lambda l: l.path, reverse=True):
+            for loc in sorted(locations, key=lambda loc: loc.path, reverse=True):
                 if loc.parent is None or loc.key is None:
                     raise OverlayError("cannot remove the document root")
                 del loc.parent[loc.key]

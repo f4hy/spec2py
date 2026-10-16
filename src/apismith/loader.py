@@ -61,7 +61,7 @@ def parse_document(text: str, name: str = "<spec>") -> JSON:
             pass
     loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     try:
-        return _plain(yaml.load(text, Loader=loader))  # noqa: S506 - safe loader
+        return _plain(yaml.load(text, Loader=loader))
     except yaml.YAMLError as exc:
         raise LoadError(f"{name}: not valid JSON or YAML: {exc}") from exc
 

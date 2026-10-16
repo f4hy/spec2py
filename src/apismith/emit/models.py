@@ -3,7 +3,7 @@
 import ast
 from typing import Any
 
-from ..plan import MISSING, RUNTIME, PAlias, PField, PModel, Plan
+from ..plan import MISSING, RUNTIME, PAlias, PField, Plan, PModel
 from .pyast import MODELS, Imports, TName, call, const, doc_expr, docstring
 
 __all__ = ["emit_models"]
@@ -43,9 +43,12 @@ def _model(model: PModel, imports: Imports) -> ast.ClassDef:
             ast.AnnAssign(
                 target=ast.Name("__pydantic_extra__"),
                 annotation=ast.Subscript(
-                    ast.Name("dict"), ast.Tuple([ast.Name("str"), model.extra.to_ast(imports)])
+                    ast.Name("dict"),
+                    ast.Tuple([ast.Name("str"), model.extra.to_ast(imports)]),
                 ),
-                value=call(ast.Name(imports.name("pydantic", "Field")), init=const(False)),
+                value=call(
+                    ast.Name(imports.name("pydantic", "Field")), init=const(False)
+                ),
                 simple=1,
             )
         )
@@ -54,12 +57,21 @@ def _model(model: PModel, imports: Imports) -> ast.ClassDef:
     bases = [TName(b, MODELS).to_ast(imports) for b in model.bases] or [
         ast.Name(imports.name(RUNTIME, "BaseModel"))
     ]
-    return ast.ClassDef(name=model.name, bases=bases, keywords=[], body=body, decorator_list=[], type_params=[])
+    return ast.ClassDef(
+        name=model.name,
+        bases=bases,
+        keywords=[],
+        body=body,
+        decorator_list=[],
+        type_params=[],
+    )
 
 
 def _alias(alias: PAlias, imports: Imports) -> list[ast.stmt]:
     out: list[ast.stmt] = [
-        ast.TypeAlias(name=ast.Name(alias.name), type_params=[], value=alias.type.to_ast(imports))
+        ast.TypeAlias(
+            name=ast.Name(alias.name), type_params=[], value=alias.type.to_ast(imports)
+        )
     ]
     if text := docstring(alias.doc, indent=0):
         out.append(doc_expr(text))
@@ -78,7 +90,11 @@ def emit_models(plan: Plan) -> tuple[ast.Module, list[str]]:
             body.extend(_alias(decl, imports))
     tail: list[ast.stmt] = []
     if any(isinstance(m, PModel) for m in plan.models):
-        tail.append(ast.Expr(call(ast.Name(imports.name(RUNTIME, "rebuild_models")), call("globals"))))
+        tail.append(
+            ast.Expr(
+                call(ast.Name(imports.name(RUNTIME, "rebuild_models")), call("globals"))
+            )
+        )
     exports = sorted(names)
     header: list[ast.stmt] = [
         doc_expr(f"Models for the {plan.client.api_name}."),

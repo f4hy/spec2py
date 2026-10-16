@@ -39,9 +39,19 @@ class CLIError(Exception):
 
 
 def _config(args: argparse.Namespace) -> Config:
-    config = load_config(pathlib.Path(args.config) if getattr(args, "config", None) else None)
+    config = load_config(
+        pathlib.Path(args.config) if getattr(args, "config", None) else None
+    )
     overrides: dict[str, object] = {}
-    for key in ("package", "client_name", "base_url", "layout", "group_by", "package_version", "project_name"):
+    for key in (
+        "package",
+        "client_name",
+        "base_url",
+        "layout",
+        "group_by",
+        "package_version",
+        "project_name",
+    ):
         value = getattr(args, key, None)
         if value is not None:
             overrides[key] = value
@@ -60,15 +70,39 @@ def _spec(args: argparse.Namespace, config: Config) -> str:
 
 
 def _add_generation_options(p: argparse.ArgumentParser) -> None:
-    p.add_argument("-o", "--output", help="output directory (default: [tool.apismith] output, or ./client)")
-    p.add_argument("--package", help="Python package name (default: from the API title)")
-    p.add_argument("--client-name", help="client class name (default: from the API title)")
-    p.add_argument("--base-url", help="default base URL (default: the spec's first server)")
-    p.add_argument("--layout", choices=["project", "package"], help="'project' adds pyproject.toml + src/ (default); 'package' writes only the package")
-    p.add_argument("--group-by", choices=["tag", "path"], help="how operations group into resources")
-    p.add_argument("--package-version", help="version written to the package's _version.py")
-    p.add_argument("--project-name", help="distribution name in the scaffolded pyproject.toml")
-    p.add_argument("--overlay", action="append", help="Overlay document to apply (repeatable)")
+    p.add_argument(
+        "-o",
+        "--output",
+        help="output directory (default: [tool.apismith] output, or ./client)",
+    )
+    p.add_argument(
+        "--package", help="Python package name (default: from the API title)"
+    )
+    p.add_argument(
+        "--client-name", help="client class name (default: from the API title)"
+    )
+    p.add_argument(
+        "--base-url", help="default base URL (default: the spec's first server)"
+    )
+    p.add_argument(
+        "--layout",
+        choices=["project", "package"],
+        help="'project' adds pyproject.toml + src/ (default); 'package' writes only the package",
+    )
+    p.add_argument(
+        "--group-by",
+        choices=["tag", "path"],
+        help="how operations group into resources",
+    )
+    p.add_argument(
+        "--package-version", help="version written to the package's _version.py"
+    )
+    p.add_argument(
+        "--project-name", help="distribution name in the scaffolded pyproject.toml"
+    )
+    p.add_argument(
+        "--overlay", action="append", help="Overlay document to apply (repeatable)"
+    )
     p.add_argument("--config", help="pyproject.toml to read [tool.apismith] from")
 
 
@@ -78,7 +112,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
     if args.check:
         return _check(spec, config)
     generated = generate(spec, config.output, config)
-    print(f"Generated {generated.package} ({len(generated.files)} files) in {config.output}")
+    print(
+        f"Generated {generated.package} ({len(generated.files)} files) in {config.output}"
+    )
     if args.verbose:
         for rel in sorted(generated.files):
             print(f"  {rel}")
@@ -101,20 +137,33 @@ def _check(spec: str, config: Config) -> int:
         fresh = package_dir(pipeline.plan, fresh_root)
         stale: list[str] = []
         for path in sorted(fresh.rglob("*")):
-            rel = path.relative_to(fresh)
-            if path.is_dir() or rel.parts[0] == "_custom" or rel.name == MANIFEST:
+            relative = path.relative_to(fresh)
+            if (
+                path.is_dir()
+                or relative.parts[0] == "_custom"
+                or relative.name == MANIFEST
+            ):
                 continue
-            existing = current / rel
+            existing = current / relative
             if not existing.is_file() or existing.read_bytes() != path.read_bytes():
-                stale.append(str(rel))
+                stale.append(str(relative))
         old = read_manifest(current).get("files")
         if isinstance(old, dict):
-            stale.extend(sorted(f"{rel} (should be removed)" for rel in old if not (fresh / rel).exists()))
+            stale.extend(
+                sorted(
+                    f"{rel} (should be removed)"
+                    for rel in old
+                    if not (fresh / rel).exists()
+                )
+            )
     if stale:
         print(f"Client in {current} is out of date with the spec:", file=sys.stderr)
         for rel in stale:
             print(f"  {rel}", file=sys.stderr)
-        print("Run `apismith update` (or `apismith generate`) to regenerate.", file=sys.stderr)
+        print(
+            "Run `apismith update` (or `apismith generate`) to regenerate.",
+            file=sys.stderr,
+        )
         return 1
     print(f"Client in {current} is up to date.")
     return 0
@@ -133,7 +182,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         diff = diff_surfaces(old_surface, new_surface)
         print(diff.render())
         if diff.bump != "none":
-            print(f"Suggested version: {current_version} -> {suggest_version(current_version, diff.bump)} ({diff.bump})")
+            print(
+                f"Suggested version: {current_version} -> {suggest_version(current_version, diff.bump)} ({diff.bump})"
+            )
     else:
         print("No previous generation found; generating from scratch.")
     if args.check:
@@ -147,10 +198,16 @@ def cmd_lint(args: argparse.Namespace) -> int:
     config = _config(args)
     pipeline = load_api(_spec(args, config), config)
     report = lint(pipeline.api)
-    print(report.to_json() if args.format == "json" else report.render(verbose=args.verbose))
+    print(
+        report.to_json()
+        if args.format == "json"
+        else report.render(verbose=args.verbose)
+    )
     if args.fix_overlay:
         overlay = report.overlay(pipeline.api.title)
-        pathlib.Path(args.fix_overlay).write_text(yaml.safe_dump(overlay, sort_keys=False), encoding="utf-8")
+        pathlib.Path(args.fix_overlay).write_text(
+            yaml.safe_dump(overlay, sort_keys=False), encoding="utf-8"
+        )
         print(f"\nWrote {len(overlay['actions'])} fix(es) to {args.fix_overlay}")
     return 1 if args.strict and report.findings else 0
 
@@ -194,35 +251,55 @@ def build_parser() -> argparse.ArgumentParser:
         description="Generate first-class Python clients from OpenAPI specs.",
         suggest_on_error=True,
     )
-    parser.add_argument("--version", action="version", version=f"apismith {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"apismith {__version__}"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("generate", help="generate a client package")
     p.add_argument("spec", nargs="?", help="path, URL or FastAPI app (module:app)")
     _add_generation_options(p)
-    p.add_argument("--check", action="store_true", help="don't write; fail if the client on disk is stale")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="don't write; fail if the client on disk is stale",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_generate)
 
-    p = sub.add_parser("fastapi", help="generate a client from a FastAPI app (module:app)")
+    p = sub.add_parser(
+        "fastapi", help="generate a client from a FastAPI app (module:app)"
+    )
     p.add_argument("app", help="import path of the app, e.g. myapp.main:app")
     _add_generation_options(p)
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_fastapi)
 
-    p = sub.add_parser("update", help="regenerate, print the API diff and suggest a version")
+    p = sub.add_parser(
+        "update", help="regenerate, print the API diff and suggest a version"
+    )
     p.add_argument("spec", nargs="?")
     _add_generation_options(p)
-    p.add_argument("--check", action="store_true", help="CI mode: fail if the committed client is stale")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="CI mode: fail if the committed client is stale",
+    )
     p.set_defaults(func=cmd_update)
 
     p = sub.add_parser("lint", help="explain what in a spec will generate poorly")
     p.add_argument("spec", nargs="?")
     p.add_argument("--overlay", action="append")
     p.add_argument("--config")
-    p.add_argument("--fix-overlay", metavar="FILE", help="write a starter Overlay fixing mechanical issues")
+    p.add_argument(
+        "--fix-overlay",
+        metavar="FILE",
+        help="write a starter Overlay fixing mechanical issues",
+    )
     p.add_argument("--format", choices=["text", "json"], default="text")
-    p.add_argument("--strict", action="store_true", help="exit 1 if there are any findings")
+    p.add_argument(
+        "--strict", action="store_true", help="exit 1 if there are any findings"
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_lint)
 
@@ -233,15 +310,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fail-on-breaking", action="store_true")
     p.set_defaults(func=cmd_diff)
 
-    p = sub.add_parser("score", help="quality scorecard for the client a spec generates")
+    p = sub.add_parser(
+        "score", help="quality scorecard for the client a spec generates"
+    )
     p.add_argument("spec", nargs="?")
     p.add_argument("--config")
     p.add_argument("--overlay", action="append")
-    p.add_argument("--typecheck", action="store_true", help="also run mypy --strict on the output")
+    p.add_argument(
+        "--typecheck", action="store_true", help="also run mypy --strict on the output"
+    )
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.set_defaults(func=cmd_score)
 
-    p = sub.add_parser("ir", help="print the normalized spec or the IR as JSON (debugging)")
+    p = sub.add_parser(
+        "ir", help="print the normalized spec or the IR as JSON (debugging)"
+    )
     p.add_argument("spec", nargs="?")
     p.add_argument("--config")
     p.add_argument("--overlay", action="append")
@@ -255,7 +338,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (CLIError, ConfigError, LoadError, NormalizeError, OverlayError, RefError) as exc:
+    except (
+        CLIError,
+        ConfigError,
+        LoadError,
+        NormalizeError,
+        OverlayError,
+        RefError,
+    ) as exc:
         print(f"apismith: error: {exc}", file=sys.stderr)
         return 2
 

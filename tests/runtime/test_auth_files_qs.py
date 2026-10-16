@@ -22,12 +22,17 @@ from .helpers import Item, Recorder, async_client, client, ok
 
 def test_api_key_locations() -> None:
     rec = Recorder([ok({"id": "1"})])
-    c = client(rec, auth=MultiAuth([
-        ApiKeyAuth("h", name="X-Key"),
-        ApiKeyAuth("q", name="key", location="query"),
-        ApiKeyAuth("c", name="session", location="cookie"),
-        ApiKeyAuth("t", name="Authorization", prefix="Token"),
-    ]))
+    c = client(
+        rec,
+        auth=MultiAuth(
+            [
+                ApiKeyAuth("h", name="X-Key"),
+                ApiKeyAuth("q", name="key", location="query"),
+                ApiKeyAuth("c", name="session", location="cookie"),
+                ApiKeyAuth("t", name="Authorization", prefix="Token"),
+            ]
+        ),
+    )
     c.request("get", "/x", cast_to=Item)
     r = rec.requests[0]
     assert r.headers["x-key"] == "h"
@@ -57,7 +62,9 @@ def oauth_server() -> tuple[Recorder, list[str]]:
                 200,
                 json={"access_token": token, "expires_in": 3600, "refresh_token": "r"},
             )
-        if request.headers.get("authorization") == "Bearer tok1" and request.url.path.endswith("/stale"):
+        if request.headers.get(
+            "authorization"
+        ) == "Bearer tok1" and request.url.path.endswith("/stale"):
             return httpx2.Response(401, json={"message": "expired"})
         return httpx2.Response(200, json={"id": request.headers["authorization"]})
 
@@ -85,11 +92,16 @@ def test_oauth2_client_credentials_fetches_caches_and_refreshes_on_401() -> None
 def test_oauth2_uses_refresh_token_when_expired() -> None:
     rec, issued = oauth_server()
     auth = OAuth2ClientCredentials(
-        token_url="https://api.test/oauth/token", client_id="id", client_secret="s", leeway=10_000
+        token_url="https://api.test/oauth/token",
+        client_id="id",
+        client_secret="s",
+        leeway=10_000,
     )
     c = client(rec, auth=auth)
     c.request("get", "/a", cast_to=Item)
-    c.request("get", "/b", cast_to=Item)  # token "expires" immediately because of leeway
+    c.request(
+        "get", "/b", cast_to=Item
+    )  # token "expires" immediately because of leeway
     assert issued == ["client_credentials", "refresh_token"]
 
 
@@ -105,10 +117,16 @@ async def test_oauth2_works_with_async_client() -> None:
 
 def test_multi_auth_sends_oauth_token_request_without_other_credentials() -> None:
     rec, _ = oauth_server()
-    auth = MultiAuth([
-        OAuth2ClientCredentials(token_url="https://api.test/oauth/token", client_id="i", client_secret="s"),
-        ApiKeyAuth("k", name="X-Key"),
-    ])
+    auth = MultiAuth(
+        [
+            OAuth2ClientCredentials(
+                token_url="https://api.test/oauth/token",
+                client_id="i",
+                client_secret="s",
+            ),
+            ApiKeyAuth("k", name="X-Key"),
+        ]
+    )
     client(rec, auth=auth).request("get", "/a", cast_to=Item)
     token_req, api_req = rec.requests
     assert "x-key" not in token_req.headers
@@ -124,14 +142,16 @@ def test_files_from_bytes_paths_file_objects_and_tuples(tmp_path: pathlib.Path) 
     path.write_bytes(b"a,b")
     buf = io.BytesIO(b"xyz")
     buf.name = "/some/dir/data.bin"
-    files = to_httpx_files({
-        "raw": b"123",
-        "path": path,
-        "obj": buf,
-        "named": ("custom.txt", b"t", "text/plain"),
-        "many": [b"1", b"2"],
-        "skip": NOT_GIVEN,
-    })
+    files = to_httpx_files(
+        {
+            "raw": b"123",
+            "path": path,
+            "obj": buf,
+            "named": ("custom.txt", b"t", "text/plain"),
+            "many": [b"1", b"2"],
+            "skip": NOT_GIVEN,
+        }
+    )
     assert files[0] == ("raw", ("upload", b"123", None))
     assert files[1] == ("path", ("report.csv", b"a,b", None))
     assert files[2][1][0] == "data.bin"
@@ -140,22 +160,34 @@ def test_files_from_bytes_paths_file_objects_and_tuples(tmp_path: pathlib.Path) 
 
 
 def test_multipart_form_fields() -> None:
-    data = to_multipart_data({
+    data = to_multipart_data(
+        {
+            "s": "x",
+            "n": 3,
+            "b": False,
+            "tags": ["a", 1],
+            "meta": {"k": "v"},
+            "skip": NOT_GIVEN,
+            "none": None,
+        }
+    )
+    assert data == {
         "s": "x",
-        "n": 3,
-        "b": False,
-        "tags": ["a", 1],
-        "meta": {"k": "v"},
-        "skip": NOT_GIVEN,
-        "none": None,
-    })
-    assert data == {"s": "x", "n": "3", "b": "false", "tags": ["a", "1"], "meta": '{"k": "v"}'}
+        "n": "3",
+        "b": "false",
+        "tags": ["a", "1"],
+        "meta": '{"k": "v"}',
+    }
 
 
 def test_multipart_request_end_to_end() -> None:
     rec = Recorder([ok({"id": "1"})])
     client(rec).request(
-        "post", "/upload", cast_to=Item, files={"file": ("a.txt", b"hello")}, form={"purpose": "x"}
+        "post",
+        "/upload",
+        cast_to=Item,
+        files={"file": ("a.txt", b"hello")},
+        form={"purpose": "x"},
     )
     req = rec.requests[0]
     assert req.headers["content-type"].startswith("multipart/form-data")
@@ -165,7 +197,9 @@ def test_multipart_request_end_to_end() -> None:
 
 def test_raw_content_body() -> None:
     rec = Recorder([ok({"id": "1"})])
-    client(rec).request("put", "/blob", cast_to=Item, content=b"\x00", content_type="image/png")
+    client(rec).request(
+        "put", "/blob", cast_to=Item, content=b"\x00", content_type="image/png"
+    )
     assert rec.requests[0].headers["content-type"] == "image/png"
     assert rec.requests[0].content == b"\x00"
 

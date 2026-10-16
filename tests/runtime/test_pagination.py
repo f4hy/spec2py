@@ -46,7 +46,10 @@ def test_cursor_pagination_iterates_lazily_across_pages() -> None:
 
 def test_manual_page_control() -> None:
     page = client(cursor_api).get_api_list(
-        "get", "/i", item_type=Item, strategy=CursorPagination(next_cursor_path="meta.next")
+        "get",
+        "/i",
+        item_type=Item,
+        strategy=CursorPagination(next_cursor_path="meta.next"),
     )
     assert page.has_next_page()
     second = page.get_next_page()
@@ -62,7 +65,9 @@ def test_cursor_from_last_item_with_has_more() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         after = request.url.params.get("starting_after")
         if after is None:
-            return httpx2.Response(200, json={"data": items("a", "b"), "has_more": True})
+            return httpx2.Response(
+                200, json={"data": items("a", "b"), "has_more": True}
+            )
         return httpx2.Response(200, json={"data": items("c"), "has_more": False})
 
     strategy = CursorPagination(
@@ -94,7 +99,9 @@ def test_offset_pagination_with_total() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         offset = int(request.url.params.get("offset", 0))
         limit = int(request.url.params["limit"])
-        return httpx2.Response(200, json={"items": data[offset : offset + limit], "total": 5})
+        return httpx2.Response(
+            200, json={"items": data[offset : offset + limit], "total": 5}
+        )
 
     strategy = OffsetPagination(items="items", total="total")
     page = client(handler).get_api_list(
@@ -151,7 +158,12 @@ async def test_async_paginator_await_and_iterate() -> None:
         assert [i.id for i in first.data] == ["a", "b"]
         second = await first.get_next_page()
         assert [i.id for i in second.data] == ["c"]
-        everything = [i.id async for i in c.get_api_list("get", "/i", item_type=Item, strategy=strategy)]
+        everything = [
+            i.id
+            async for i in c.get_api_list(
+                "get", "/i", item_type=Item, strategy=strategy
+            )
+        ]
         assert everything == ["a", "b", "c"]
         pages = [p async for p in first.iter_pages()]
         assert len(pages) == 3

@@ -68,6 +68,7 @@ class _ResourceEmitter:
         )
         method_names = {m.name for m in resource.methods}
         self.imports.shadowed = method_names & _BUILTIN_NAMES
+        self.body_shadowed: set[str] = set()
         self.imports.preassign(RUNTIME, *_RUNTIME_NAMES, *RUNTIME_RENAMES.values())
         self.imports.preassign("typing", "cast")
         self.imports.preassign("types", "NoneType")
@@ -98,8 +99,15 @@ class _ResourceEmitter:
             return self.ann(t)
         # ``cast(type[X | Y], X | Y)`` keeps the precise result type, where
         # passing the union bare isn't a ``type[T]`` to checkers.
-        type_of = TSub(TName("type"), (t.static(),)).to_ast(self.imports)
-        return call(ast.Name(self.imports.name("typing", "cast")), type_of, self.ann(t))
+        # Inside the method body a parameter may shadow builtins (``type``).
+        saved = self.imports.shadowed
+        self.imports.shadowed = saved | self.body_shadowed
+        try:
+            type_of = TSub(TName("type"), (t.static(),)).to_ast(self.imports)
+            value = self.ann(t)
+        finally:
+            self.imports.shadowed = saved
+        return call(ast.Name(self.imports.name("typing", "cast")), type_of, value)
 
     # -- signature -------------------------------------------------------------
 
@@ -274,6 +282,7 @@ class _ResourceEmitter:
     # -- methods ---------------------------------------------------------------
 
     def method(self, method: PMethod) -> ast.stmt:
+        self.body_shadowed = {p.py_name for p in method.params} & _BUILTIN_NAMES
         client = ast.Attribute(ast.Attribute(ast.Name("self"), "_client"), "request")
         verb = const(method.http_method)
         path = self.path_expr(method)

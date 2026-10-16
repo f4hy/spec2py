@@ -8,7 +8,12 @@ import pytest
 from apismith.build_ir import build_ir
 from apismith.ir import API, Kind, to_jsonable
 from apismith.loader import LoadError, load_spec, parse_document
-from apismith.normalize import NormalizeError, normalize, swagger2_to_openapi3, upgrade_to_31
+from apismith.normalize import (
+    NormalizeError,
+    normalize,
+    swagger2_to_openapi3,
+    upgrade_to_31,
+)
 
 GOLDEN = pathlib.Path(__file__).parent / "golden"
 
@@ -31,17 +36,32 @@ def test_missing_spec() -> None:
 
 
 def test_swagger2_conversion(specs: pathlib.Path) -> None:
-    doc = swagger2_to_openapi3(json.loads((specs / "petstore_swagger2.json").read_text()))
+    doc = swagger2_to_openapi3(
+        json.loads((specs / "petstore_swagger2.json").read_text())
+    )
     assert doc["openapi"] == "3.0.3"
     assert doc["servers"] == [{"url": "https://petstore.example.com/v2"}]
     assert set(doc["components"]["schemas"]) == {"Pet", "Category", "ApiError"}
-    assert doc["components"]["schemas"]["Pet"]["properties"]["nickname"]["nullable"] is True
-    assert doc["components"]["securitySchemes"]["oauth"]["flows"]["clientCredentials"]["tokenUrl"]
+    assert (
+        doc["components"]["schemas"]["Pet"]["properties"]["nickname"]["nullable"]
+        is True
+    )
+    assert doc["components"]["securitySchemes"]["oauth"]["flows"]["clientCredentials"][
+        "tokenUrl"
+    ]
     pets = doc["paths"]["/pets"]
     tags = next(p for p in pets["get"]["parameters"] if p["name"] == "tags")
-    assert tags == {"name": "tags", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": False}
+    assert tags == {
+        "name": "tags",
+        "in": "query",
+        "schema": {"type": "array", "items": {"type": "string"}},
+        "style": "form",
+        "explode": False,
+    }
     body = pets["post"]["requestBody"]
-    assert body["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/Pet"}
+    assert body["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/Pet"
+    }
     photo = doc["paths"]["/pets/{petId}/photo"]["post"]["requestBody"]
     form = photo["content"]["multipart/form-data"]["schema"]
     assert form["properties"]["file"] == {"type": "string", "format": "binary"}
@@ -51,19 +71,39 @@ def test_swagger2_conversion(specs: pathlib.Path) -> None:
 
 
 def test_upgrade_30_nullable_and_exclusive_bounds() -> None:
-    doc = upgrade_to_31({
-        "openapi": "3.0.3",
-        "components": {"schemas": {
-            "A": {"type": "string", "nullable": True, "enum": ["x"]},
-            "B": {"allOf": [{"$ref": "#/components/schemas/A"}], "nullable": True, "description": "d"},
-            "C": {"type": "number", "minimum": 0, "exclusiveMinimum": True, "maximum": 5, "exclusiveMaximum": False},
-            "D": {"type": "object", "properties": {"nullable": {"type": "string"}}},
-        }},
-    })
+    doc = upgrade_to_31(
+        {
+            "openapi": "3.0.3",
+            "components": {
+                "schemas": {
+                    "A": {"type": "string", "nullable": True, "enum": ["x"]},
+                    "B": {
+                        "allOf": [{"$ref": "#/components/schemas/A"}],
+                        "nullable": True,
+                        "description": "d",
+                    },
+                    "C": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": True,
+                        "maximum": 5,
+                        "exclusiveMaximum": False,
+                    },
+                    "D": {
+                        "type": "object",
+                        "properties": {"nullable": {"type": "string"}},
+                    },
+                }
+            },
+        }
+    )
     s = doc["components"]["schemas"]
     assert doc["openapi"] == "3.1.0"
     assert s["A"] == {"type": ["string", "null"], "enum": ["x", None]}
-    assert s["B"] == {"description": "d", "anyOf": [{"allOf": [{"$ref": "#/components/schemas/A"}]}, {"type": "null"}]}
+    assert s["B"] == {
+        "description": "d",
+        "anyOf": [{"allOf": [{"$ref": "#/components/schemas/A"}]}, {"type": "null"}],
+    }
     assert s["C"] == {"type": "number", "exclusiveMinimum": 0, "maximum": 5}
     assert s["D"]["properties"]["nullable"] == {"type": "string"}
 
@@ -89,7 +129,9 @@ def test_nullable_30_spec(specs: pathlib.Path) -> None:
     assert note.property("body").schema.nullable  # type: ignore[union-attr]
     assert note.property("archived_at").schema.format == "date-time"  # type: ignore[union-attr]
     color = note.property("color").schema  # type: ignore[union-attr]
-    assert color.kind is Kind.ENUM and color.nullable and color.values == ["red", "blue"]
+    assert (
+        color.kind is Kind.ENUM and color.nullable and color.values == ["red", "blue"]
+    )
     author = note.property("author").schema  # type: ignore[union-attr]
     assert author.kind is Kind.REF and author.nullable
     assert api.servers[0].url == "https://eu.notes.test/api"
@@ -108,7 +150,10 @@ def test_ir_union_inheritance_and_streams(specs: pathlib.Path) -> None:
 
 def test_ir_snapshot(specs: pathlib.Path) -> None:
     """The acme IR is checked in; any change in how specs are read shows up here."""
-    actual = json.dumps(to_jsonable(ir_for(specs / "acme.yaml")), indent=1, sort_keys=True) + "\n"
+    actual = (
+        json.dumps(to_jsonable(ir_for(specs / "acme.yaml")), indent=1, sort_keys=True)
+        + "\n"
+    )
     golden = GOLDEN / "acme.ir.json"
     if os.environ.get("APISMITH_UPDATE_GOLDEN") or not golden.exists():
         golden.parent.mkdir(exist_ok=True)
@@ -121,19 +166,33 @@ def test_schema_edge_cases() -> None:
         "openapi": "3.1.0",
         "info": {"title": "E", "version": "1"},
         "paths": {},
-        "components": {"schemas": {
-            "Tuple": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "integer"}]},
-            "Multi": {"type": ["string", "integer", "null"]},
-            "Pattern": {"type": "object", "patternProperties": {"^x-": {"type": "string"}}},
-            "Const": {"const": "fixed"},
-            "Empty": {},
-            "OnlyNull": {"type": "null"},
-            "SiblingRef": {"$ref": "#/components/schemas/Const", "description": "doc"},
-            "RefWithProps": {"$ref": "#/components/schemas/Base", "properties": {"x": {"type": "integer"}}},
-            "Base": {"type": "object", "properties": {"id": {"type": "string"}}},
-            "Binary": {"type": "string", "contentMediaType": "image/png"},
-            "Deep": {"$ref": "#/components/schemas/Base/properties/id"},
-        }},
+        "components": {
+            "schemas": {
+                "Tuple": {
+                    "type": "array",
+                    "prefixItems": [{"type": "string"}, {"type": "integer"}],
+                },
+                "Multi": {"type": ["string", "integer", "null"]},
+                "Pattern": {
+                    "type": "object",
+                    "patternProperties": {"^x-": {"type": "string"}},
+                },
+                "Const": {"const": "fixed"},
+                "Empty": {},
+                "OnlyNull": {"type": "null"},
+                "SiblingRef": {
+                    "$ref": "#/components/schemas/Const",
+                    "description": "doc",
+                },
+                "RefWithProps": {
+                    "$ref": "#/components/schemas/Base",
+                    "properties": {"x": {"type": "integer"}},
+                },
+                "Base": {"type": "object", "properties": {"id": {"type": "string"}}},
+                "Binary": {"type": "string", "contentMediaType": "image/png"},
+                "Deep": {"$ref": "#/components/schemas/Base/properties/id"},
+            }
+        },
     }
     api = build_ir(normalize(doc, "x"))
     s = api.schemas

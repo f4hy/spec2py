@@ -144,7 +144,9 @@ def test_status_errors_are_typed(status: int, exc: type[Exception]) -> None:
 
 
 def test_error_model_fallbacks_and_unparseable_bodies() -> None:
-    rec = Recorder([ok({"detail": "gone"}, status=404), httpx2.Response(404, text="plain")])
+    rec = Recorder(
+        [ok({"detail": "gone"}, status=404), httpx2.Response(404, text="plain")]
+    )
     c = client(rec)
     with pytest.raises(NotFoundError) as info:
         c.request("get", "/x", cast_to=Item, errors={"4XX": ErrorBody})
@@ -205,7 +207,9 @@ def test_caller_idempotency_key_wins() -> None:
 
 
 def test_x_should_retry_header_overrides_status() -> None:
-    rec = Recorder([httpx2.Response(400, headers={"x-should-retry": "true"}), ok({"id": "1"})])
+    rec = Recorder(
+        [httpx2.Response(400, headers={"x-should-retry": "true"}), ok({"id": "1"})]
+    )
     assert client(rec).request("get", "/x", cast_to=Item).id == "1"
     rec = Recorder([httpx2.Response(503, headers={"x-should-retry": "false"})])
     with pytest.raises(InternalServerError):
@@ -231,7 +235,9 @@ def test_retry_delay_honours_retry_after_and_backs_off() -> None:
     assert policy.delay(3) == 4.0
     assert policy.delay(10) == 8.0
     assert policy.delay(0, httpx2.Response(429, headers={"retry-after": "3"})) == 3.0
-    assert policy.delay(0, httpx2.Response(429, headers={"retry-after-ms": "250"})) == 0.25
+    assert (
+        policy.delay(0, httpx2.Response(429, headers={"retry-after-ms": "250"})) == 0.25
+    )
     date = "Wed, 21 Oct 2015 07:28:00 GMT"  # in the past -> retry now
     assert policy.delay(0, httpx2.Response(429, headers={"retry-after": date})) == 0.0
     # absurd hints fall back to backoff
@@ -243,7 +249,9 @@ def test_retry_delay_honours_retry_after_and_backs_off() -> None:
 def test_sync_client_sleeps_between_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     slept: list[float] = []
     monkeypatch.setattr("time.sleep", slept.append)
-    c = client(Recorder([httpx2.Response(503, headers={"retry-after": "2"}), ok({"id": "1"})]))
+    c = client(
+        Recorder([httpx2.Response(503, headers={"retry-after": "2"}), ok({"id": "1"})])
+    )
     del c._sleep  # use the real implementation (with the patched time.sleep)
     c.request("get", "/x", cast_to=Item)
     assert slept == [2.0]
@@ -375,7 +383,51 @@ async def test_async_real_sleep_uses_anyio(monkeypatch: pytest.MonkeyPatch) -> N
         slept.append(seconds)
 
     monkeypatch.setattr("anyio.sleep", fake_sleep)
-    c = async_client(Recorder([httpx2.Response(429, headers={"retry-after": "1"}), ok({"id": "1"})]))
+    c = async_client(
+        Recorder([httpx2.Response(429, headers={"retry-after": "1"}), ok({"id": "1"})])
+    )
     del c._sleep
     await c.request("get", "/x", cast_to=Item)
     assert slept == [1.0]
+
+
+def test_opentelemetry_spans(monkeypatch: pytest.MonkeyPatch) -> None:
+    import contextlib
+    import sys
+    import types
+
+    spans: list[dict[str, object]] = []
+
+    class Span:
+        def __init__(self, name: str) -> None:
+            self.attrs: dict[str, object] = {"name": name}
+            spans.append(self.attrs)
+
+        def set_attribute(self, key: str, value: object) -> None:
+            self.attrs[key] = value
+
+    class Tracer:
+        @contextlib.contextmanager
+        def start_as_current_span(self, name: str, kind: object = None):  # type: ignore[no-untyped-def]
+            yield Span(name)
+
+    trace = types.SimpleNamespace(
+        get_tracer=lambda name: Tracer(),
+        SpanKind=types.SimpleNamespace(CLIENT="client"),
+    )
+    otel = types.ModuleType("opentelemetry")
+    otel.trace = trace  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "opentelemetry", otel)
+    monkeypatch.setitem(sys.modules, "opentelemetry.trace", trace)  # type: ignore[arg-type]
+    rec = Recorder([httpx2.Response(503), ok({"id": "1"})])
+    client(rec).request("get", "/items/{id}", cast_to=Item)
+    assert spans == [
+        {
+            "name": "GET /items/{id}",
+            "http.request.method": "GET",
+            "url.template": "/items/{id}",
+            "server.address": "api.test",
+            "http.response.status_code": 200,
+            "http.request.resend_count": 1,
+        }
+    ]

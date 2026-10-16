@@ -83,13 +83,23 @@ def test_wire_names_on_output_and_python_names_on_input() -> None:
 
 
 def test_discriminated_union() -> None:
-    pets = parse_value(list[Pet], [{"type": "cat", "meows": True}, {"type": "dog", "barks": False}])
+    pets = parse_value(
+        list[Pet], [{"type": "cat", "meows": True}, {"type": "dog", "barks": False}]
+    )
     assert [type(p).__name__ for p in pets] == ["Cat", "Dog"]
     assert Cat(meows=True).type == "cat"
 
 
 def test_best_effort_parse_keeps_what_validates() -> None:
-    inv = parse_value(Invoice, {"id": "1", "status": "open", "lines": [{"amount": 1}, {"amount": "x"}], "new": True})
+    inv = parse_value(
+        Invoice,
+        {
+            "id": "1",
+            "status": "open",
+            "lines": [{"amount": 1}, {"amount": "x"}],
+            "new": True,
+        },
+    )
     assert inv.id == "1"
     assert isinstance(inv.lines[0], Line)
     assert inv.lines[1].amount == "x"  # type: ignore[comparison-overlap]
@@ -104,8 +114,17 @@ def test_jsonable() -> None:
     import datetime
 
     when = datetime.date(2026, 1, 2)
-    value = {"inv": Invoice(id="1", status="open"), "d": when, "skip": NOT_GIVEN, "t": (1, 2)}
-    assert jsonable(value) == {"inv": {"id": "1", "status": "open"}, "d": "2026-01-02", "t": [1, 2]}
+    value = {
+        "inv": Invoice(id="1", status="open"),
+        "d": when,
+        "skip": NOT_GIVEN,
+        "t": (1, 2),
+    }
+    assert jsonable(value) == {
+        "inv": {"id": "1", "status": "open"},
+        "d": "2026-01-02",
+        "t": [1, 2],
+    }
 
 
 def test_link_models_resolves_cross_module_references() -> None:
@@ -121,8 +140,16 @@ def test_link_models_resolves_cross_module_references() -> None:
     )
     sub_b = types.ModuleType("fakepkg.models._b")
     sys.modules["fakepkg.models._b"] = sub_b
-    exec("from apismith_runtime import BaseModel\nclass B(BaseModel):\n    x: int\n", sub_b.__dict__)
-    namespace = {"__name__": "fakepkg.models", "__all__": ["A", "B"], "A": sub.A, "B": sub_b.B}
+    exec(
+        "from apismith_runtime import BaseModel\nclass B(BaseModel):\n    x: int\n",
+        sub_b.__dict__,
+    )
+    namespace = {
+        "__name__": "fakepkg.models",
+        "__all__": ["A", "B"],
+        "A": sub.A,
+        "B": sub_b.B,
+    }
     try:
         link_models(namespace)
         assert sub.A.model_validate({"b": {"x": 1}}).b.x == 1

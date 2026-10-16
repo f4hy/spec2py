@@ -32,8 +32,7 @@ class _ClientEmitter:
         }
         for r in plan.resources:
             self.renames.update(resource_class_names(r))
-            if r.custom:
-                self.renames[f"Async{r.custom[1]}"] = r.custom[1]
+        self.custom_locals: dict[str, str] = {}
         self.imports = Imports(
             package=self.client.package,
             here="_client",
@@ -53,12 +52,15 @@ class _ClientEmitter:
                 self.imports.name(module, async_name)
                 self.imports.name(module, sync_name)
         if r.custom and not raw:
-            custom_module = "._custom." + r.custom[0].removeprefix(
-                "_custom."
-            ).removeprefix(".")
-            self.imports.preassign(custom_module, r.custom[1], f"Async{r.custom[1]}")
-            self.imports.name(custom_module, r.custom[1])
-            self.imports.name(custom_module, f"Async{r.custom[1]}")
+            # The user's subclass usually reuses the generated class's name, so
+            # it's imported under a clash-safe local name.
+            module = "._custom." + r.custom[0].removeprefix("_custom.").removeprefix(
+                "."
+            )
+            async_local = self.imports.name(module, f"Async{r.custom[1]}")
+            sync_local = self.imports.name(module, r.custom[1])
+            self.renames[async_local] = sync_local
+            self.custom_locals[r.attr] = async_local
 
     def auth_statements(self) -> list[ast.stmt]:
         """Read credentials (argument, then environment) and build ``auth``."""
@@ -350,7 +352,7 @@ class _ClientEmitter:
         body.append(self.init())
         for r in self.plan.resources:
             self.resource_import(r)
-            klass = f"Async{r.custom[1]}" if r.custom else f"Async{r.class_name}"
+            klass = self.custom_locals.get(r.attr, f"Async{r.class_name}")
             body.append(
                 self.cached(r.attr, ast.Name(klass), call(klass, ast.Name("self")))
             )

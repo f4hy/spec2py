@@ -49,14 +49,16 @@ def test_sync_stream_yields_typed_events_until_done() -> None:
 def test_stream_raw_events_and_str_event_type() -> None:
     rec = Recorder([sse("event: a\ndata: x\n\nevent: b\ndata: y\n\n")])
     with client(rec).stream("get", "/s", event_type=str, terminator=None) as events:
-        assert [e for e in events] == ["x", "y"]
+        assert list(events) == ["x", "y"]
     rec = Recorder([sse("event: a\ndata: x\n\n")])
     with client(rec).stream("get", "/s", event_type=str) as events:
         assert [(e.event, e.data) for e in events.events()] == [("a", "x")]
 
 
 def test_error_event_raises() -> None:
-    rec = Recorder([sse('data: {"text": "a"}\n\nevent: error\ndata: {"message": "boom"}\n\n')])
+    rec = Recorder(
+        [sse('data: {"text": "a"}\n\nevent: error\ndata: {"message": "boom"}\n\n')]
+    )
     with client(rec).stream("get", "/s", event_type=Delta) as events:
         it = iter(events)
         assert next(it).text == "a"
@@ -68,7 +70,9 @@ def test_error_event_raises() -> None:
 def test_ndjson_stream() -> None:
     body = '{"text": "a"}\n\n{"text": "b"}\n'
     rec = Recorder([httpx2.Response(200, content=body.encode())])
-    with client(rec).stream("get", "/s", event_type=Delta, stream_format="ndjson") as events:
+    with client(rec).stream(
+        "get", "/s", event_type=Delta, stream_format="ndjson"
+    ) as events:
         assert [e.text for e in events] == ["a", "b"]
     assert rec.requests[0].headers["accept"] == "application/x-ndjson"
 
@@ -88,7 +92,9 @@ def test_stream_retries_before_streaming() -> None:
 
 
 async def test_async_stream() -> None:
-    rec = Recorder([sse('data: {"text": "a"}\n\ndata: {"text": "b"}\n\ndata: [DONE]\n\n')])
+    rec = Recorder(
+        [sse('data: {"text": "a"}\n\ndata: {"text": "b"}\n\ndata: [DONE]\n\n')]
+    )
     async with async_client(rec) as c:
         async with c.stream("post", "/s", event_type=Delta) as events:
             assert [e.text async for e in events] == ["a", "b"]
@@ -97,7 +103,9 @@ async def test_async_stream() -> None:
 async def test_async_ndjson_and_raw_events() -> None:
     rec = Recorder([httpx2.Response(200, content=b'{"text": "a"}\n')])
     async with async_client(rec) as c:
-        async with c.stream("get", "/s", event_type=Delta, stream_format="ndjson") as ev:
+        async with c.stream(
+            "get", "/s", event_type=Delta, stream_format="ndjson"
+        ) as ev:
             assert [e.text async for e in ev] == ["a"]
     rec = Recorder([sse("event: x\ndata: 1\n\n")])
     async with async_client(rec) as c:

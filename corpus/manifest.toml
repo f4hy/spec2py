@@ -1,0 +1,58 @@
+# Real-world specs the generator is regression-tested against.
+#
+# Each spec is pinned by SHA-256. `uv run corpus/run.py` downloads missing specs
+# into corpus/specs/ (gitignored), refuses any whose hash changed upstream (re-pin
+# with --repin), generates a client for each, runs the static gates and prints
+# the quality scorecard. The design target is 200+ specs; add entries freely.
+
+[[spec]]
+name = "petstore3"
+url = "https://petstore3.swagger.io/api/v3/openapi.json"
+sha256 = "00441c05add60f28da55eb4563d3fb6bbda364ba8eb7b381e2e2c98613005c82"
+
+[[spec]]
+name = "petstore2"
+url = "https://petstore.swagger.io/v2/swagger.json"
+sha256 = "bb116730d391e330119c691f9b124d07b9afdea61b5a252345b577e9a4c2f98b"
+
+[[spec]]
+name = "xkcd"
+url = "https://api.apis.guru/v2/specs/xkcd.com/1.0.0/openapi.yaml"
+sha256 = "a5cd689251e5ee98cde931114eb85c38da973a1cd3df9df126fb5356dfb8b06b"
+
+[[spec]]
+name = "spotify"
+url = "https://api.apis.guru/v2/specs/spotify.com/1.0.0/openapi.yaml"
+sha256 = "09fd842675302d2814929af5db7a4abea6dcca6edde48192a9d4b5a54276be76"
+
+[[spec]]
+name = "slack"
+url = "https://api.apis.guru/v2/specs/slack.com/1.7.0/openapi.yaml"
+sha256 = "57bb8c27ea702030feee407b794204c3fb532607f0031d9e78c455f654babdca"
+
+[[spec]]
+name = "digitalocean"
+url = "https://api.apis.guru/v2/specs/digitalocean.com/2.0/openapi.yaml"
+sha256 = "2b7b040e296e92e40b5163e0bf90c3be95043ec4d27e193c491017614f69a54e"
+
+[[spec]]
+name = "twilio"
+url = "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/json/twilio_api_v2010.json"
+sha256 = "bfdf249a129819af274d6bdc7672156ea3416ad48670a6f0544def6ef386ba87"
+
+[[spec]]
+name = "openai"
+url = "https://raw.githubusercontent.com/openai/openai-openapi/manual_spec/openapi.yaml"
+sha256 = "6a6c681b182002de4ad335fa80214158f2d8f383a418f865c87876c3ed67cad9"
+
+[[spec]]
+name = "stripe"
+url = "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json"
+sha256 = "7cff4cc46d0654101a36a3302f7544640f5f73e4f3cad6f264f0e23c19fa1776"
+large = true
+
+[[spec]]
+name = "github"
+url = "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json"
+sha256 = "65ca6210f72021d07e4608fc26787c8132d77f8f3a475d8c065f0d7f5f02f6dc"
+large = true

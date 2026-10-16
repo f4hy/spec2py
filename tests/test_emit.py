@@ -24,15 +24,20 @@ def snapshot(package_dir: pathlib.Path) -> dict[str, str]:
     return {
         str(p.relative_to(package_dir)): p.read_text()
         for p in sorted(package_dir.rglob("*"))
-        if p.is_file() and p.name != MANIFEST and "_custom" not in p.parts and "__pycache__" not in p.parts
+        if p.is_file()
+        and p.name != MANIFEST
+        and "_custom" not in p.parts
+        and "__pycache__" not in p.parts
     }
 
 
-@pytest.mark.parametrize("spec", ["acme.yaml", "petstore_swagger2.json", "nullable_30.yaml"])
+@pytest.mark.parametrize(
+    "spec", ["acme.yaml", "petstore_swagger2.json", "nullable_30.yaml"]
+)
 def test_golden_output(spec: str, specs: pathlib.Path, tmp_path: pathlib.Path) -> None:
     package = generate_package(specs / spec, tmp_path)
     actual = snapshot(package)
-    golden = GOLDEN / spec.split(".")[0]
+    golden = GOLDEN / spec.split(".", maxsplit=1)[0]
     if os.environ.get("APISMITH_UPDATE_GOLDEN") or not golden.exists():
         for old in golden.rglob("*") if golden.exists() else []:
             if old.is_file():
@@ -63,23 +68,31 @@ def test_sync_code_is_derived_from_async(acme_dir: pathlib.Path) -> None:
     source = (acme_dir / "acme" / "resources" / "invoices.py").read_text()
     tree = ast.parse(source)
     classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
-    sync_methods = [f.name for f in classes["Invoices"].body if isinstance(f, ast.FunctionDef)]
+    sync_methods = [
+        f.name for f in classes["Invoices"].body if isinstance(f, ast.FunctionDef)
+    ]
     async_methods = [
-        f.name for f in classes["AsyncInvoices"].body if isinstance(f, ast.FunctionDef | ast.AsyncFunctionDef)
+        f.name
+        for f in classes["AsyncInvoices"].body
+        if isinstance(f, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
     assert sync_methods == async_methods
     assert not any(isinstance(n, ast.Await) for n in ast.walk(classes["Invoices"]))
     assert any(isinstance(n, ast.Await) for n in ast.walk(classes["AsyncInvoices"]))
 
 
-def test_custom_directory_survives_and_is_reexported(specs: pathlib.Path, tmp_path: pathlib.Path) -> None:
+def test_custom_directory_survives_and_is_reexported(
+    specs: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
     package = generate_package(specs / "acme.yaml", tmp_path)
     custom = package / "_custom" / "__init__.py"
     assert "__all__" in custom.read_text()
-    custom.write_text('__all__ = ["helper"]\n\n\ndef helper() -> str:\n    return "mine"\n')
+    custom.write_text(
+        '__all__ = ["helper"]\n\n\ndef helper() -> str:\n    return "mine"\n'
+    )
     (package / "_custom" / "extra.py").write_text("X = 1\n")
     generate_package(specs / "acme.yaml", tmp_path)
-    assert "return \"mine\"" in custom.read_text()
+    assert 'return "mine"' in custom.read_text()
     assert (package / "_custom" / "extra.py").exists()
     init = (package / "__init__.py").read_text()
     assert "from ._custom import helper" in init
@@ -89,14 +102,18 @@ def test_custom_directory_survives_and_is_reexported(specs: pathlib.Path, tmp_pa
 def test_stale_files_are_removed(specs: pathlib.Path, tmp_path: pathlib.Path) -> None:
     package = generate_package(specs / "acme.yaml", tmp_path)
     assert (package / "resources" / "events.py").exists()
-    generate_package(specs / "acme.yaml", tmp_path, overlays=(str(specs / "acme_overlay.yaml"),))
+    generate_package(
+        specs / "acme.yaml", tmp_path, overlays=(str(specs / "acme_overlay.yaml"),)
+    )
     assert not (package / "resources" / "events.py").exists()
     models = (package / "models.py").read_text()
     assert "vip: bool | None = None" in models
     assert "def void(" in (package / "resources" / "invoices.py").read_text()
 
 
-def test_project_layout_scaffolds_once(specs: pathlib.Path, tmp_path: pathlib.Path) -> None:
+def test_project_layout_scaffolds_once(
+    specs: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
     generate(str(specs / "acme.yaml"), tmp_path, Config())
     pyproject = tmp_path / "pyproject.toml"
     assert 'name = "acme"' in pyproject.read_text()
@@ -109,14 +126,36 @@ def test_project_layout_scaffolds_once(specs: pathlib.Path, tmp_path: pathlib.Pa
 
 def test_large_specs_split_models_into_a_package(tmp_path: pathlib.Path) -> None:
     # A tree of references (each model points at its "parent"), like real specs.
-    schemas = {f"Thing{i}": {"type": "object", "properties": {"next": {"$ref": f"#/components/schemas/Thing{i // 2}"}}} for i in range(450)}
+    schemas = {
+        f"Thing{i}": {
+            "type": "object",
+            "properties": {"next": {"$ref": f"#/components/schemas/Thing{i // 2}"}},
+        }
+        for i in range(450)
+    }
     schemas["Base"] = {"type": "object", "properties": {"id": {"type": "string"}}}
-    schemas["Child"] = {"allOf": [{"$ref": "#/components/schemas/Base"}, {"properties": {"x": {"type": "integer"}}}]}
-    schemas["Choice"] = {"oneOf": [{"$ref": "#/components/schemas/Thing1"}, {"type": "string"}]}
+    schemas["Child"] = {
+        "allOf": [
+            {"$ref": "#/components/schemas/Base"},
+            {"properties": {"x": {"type": "integer"}}},
+        ]
+    }
+    schemas["Choice"] = {
+        "oneOf": [{"$ref": "#/components/schemas/Thing1"}, {"type": "string"}]
+    }
     spec = tmp_path / "big.json"
     import json
 
-    spec.write_text(json.dumps({"openapi": "3.1.0", "info": {"title": "Big", "version": "1"}, "paths": {}, "components": {"schemas": schemas}}))
+    spec.write_text(
+        json.dumps(
+            {
+                "openapi": "3.1.0",
+                "info": {"title": "Big", "version": "1"},
+                "paths": {},
+                "components": {"schemas": schemas},
+            }
+        )
+    )
     package = generate_package(spec, tmp_path / "out")
     files = sorted(p.name for p in (package / "models").iterdir())
     assert "_bases.py" in files and "_aliases.py" in files and "__init__.py" in files
@@ -128,3 +167,30 @@ def test_large_specs_split_models_into_a_package(tmp_path: pathlib.Path) -> None
     assert type(t.next).__name__ == "Thing150"
     assert type(t.next.next).__name__ == "Thing75"
     assert big.models.Child(id="a", x=1).id == "a"
+
+
+def test_custom_resource_subclass_is_instantiated(
+    specs: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    package = generate_package(specs / "acme.yaml", tmp_path)
+    (package / "_custom" / "invoices.py").write_text(
+        "from ..resources.invoices import AsyncInvoices as _AsyncInvoices\n"
+        "from ..resources.invoices import Invoices as _Invoices\n\n\n"
+        "class Invoices(_Invoices):\n"
+        "    def total_open(self) -> int:\n"
+        "        return sum(1 for _ in self.list(status='open'))\n\n\n"
+        "class AsyncInvoices(_AsyncInvoices):\n"
+        "    pass\n"
+    )
+    generate_package(
+        specs / "acme.yaml",
+        tmp_path,
+        custom_resources={"invoices": "invoices:Invoices"},
+    )
+    from .conftest import import_generated
+
+    acme = import_generated(tmp_path, "acme")
+    client = acme.Acme(api_key="k")
+    assert type(client.invoices).__module__ == "acme._custom.invoices"
+    assert hasattr(client.invoices, "total_open")
+    assert type(acme.AsyncAcme(api_key="k").invoices).__name__ == "AsyncInvoices"

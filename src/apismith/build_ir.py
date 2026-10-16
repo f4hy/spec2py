@@ -343,6 +343,8 @@ class _Builder:
 
     def _all_of(self, parts: list[JSON], n: Obj) -> Schema:
         rest = {k: v for k, v in n.items() if k in _STRUCTURAL and k != "allOf"}
+        if rest == {"type": "object"}:
+            rest = {}  # ``type: object`` next to allOf adds nothing
         if rest:
             parts = [*parts, rest]
         if len(parts) == 1:
@@ -371,8 +373,11 @@ class _Builder:
                 if built.additional is not None:
                     obj.additional = built.additional
                 obj.lossy.extend(built.lossy)
-            elif built.kind is Kind.ANY:
-                continue
+            elif built.kind is Kind.ANY or (
+                built.kind is Kind.MAP
+                and (built.additional is None or built.additional.kind is Kind.ANY)
+            ):
+                continue  # an untyped object member constrains nothing
             elif (
                 isinstance(part, dict)
                 and "required" in part

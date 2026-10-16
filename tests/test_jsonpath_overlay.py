@@ -60,7 +60,9 @@ def test_jsonpath_locations_are_mutable() -> None:
     assert find(doc, "$.items[1]")[0].path == ("items", 1)
 
 
-@pytest.mark.parametrize("bad", ["paths", "$.", "$[", "$.items[?@.n ==]", "$.x[?nope(@)]", "$ $"])
+@pytest.mark.parametrize(
+    "bad", ["paths", "$.", "$[", "$.items[?@.n ==]", "$.x[?nope(@)]", "$ $"]
+)
 def test_jsonpath_errors(bad: str) -> None:
     with pytest.raises(JSONPathError):
         find(DOC, bad)
@@ -73,7 +75,10 @@ def test_overlay_update_remove_copy() -> None:
         {
             "overlay": "1.1.0",
             "actions": [
-                {"target": "$.paths['/a'].post", "update": {"operationId": "createA", "tags": ["z"]}},
+                {
+                    "target": "$.paths['/a'].post",
+                    "update": {"operationId": "createA", "tags": ["z"]},
+                },
                 {"target": "$.paths['/b/{id}']", "remove": True},
                 {"target": "$.items[?@.n == 3]", "copy": "$.items[0]"},
                 {"target": "$", "update": {"info": {"title": "T"}}},

@@ -94,7 +94,17 @@ _FIELD_RESERVED: Final = frozenset(
     }
 )
 _PARAM_RESERVED: Final = frozenset(
-    {"self", "extra_headers", "extra_query", "extra_body", "timeout"}
+    # Names generated method bodies use must not be shadowed by parameters.
+    {
+        "self",
+        "extra_headers",
+        "extra_query",
+        "extra_body",
+        "timeout",
+        "cast",
+        "build_body",
+        "path_template",
+    }
 )
 _CLIENT_RESERVED: Final = frozenset(
     {
@@ -152,6 +162,9 @@ _CURSOR_FIELDS: Final = (
     "next_page",
     "nextpage",
     "next_page_url",
+    "next_page_uri",
+    "nextlink",
+    "next_link",
     "next_url",
     "marker",
     "last_id",

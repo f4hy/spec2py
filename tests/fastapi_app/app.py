@@ -77,12 +77,16 @@ def list_todos(
     start = ids.index(int(cursor)) if cursor else 0
     chunk = ids[start : start + limit]
     nxt = ids[start + limit] if start + limit < len(ids) else None
-    return TodoPage(data=[TODOS[i] for i in chunk], next_cursor=str(nxt) if nxt else None)
+    return TodoPage(
+        data=[TODOS[i] for i in chunk], next_cursor=str(nxt) if nxt else None
+    )
 
 
 @app.post("/todos", tags=["todos"], operation_id="createTodo", status_code=201)
 def create_todo(body: TodoIn, _: Annotated[str, Depends(authed)]) -> Todo:
-    todo = Todo(id=max(TODOS, default=0) + 1, created_at=datetime.now(UTC), **body.model_dump())
+    todo = Todo(
+        id=max(TODOS, default=0) + 1, created_at=datetime.now(UTC), **body.model_dump()
+    )
     TODOS[todo.id] = todo
     return todo
 
@@ -94,7 +98,9 @@ def get_todo(todo_id: int, _: Annotated[str, Depends(authed)]) -> Todo:
     return TODOS[todo_id]
 
 
-@app.delete("/todos/{todo_id}", tags=["todos"], operation_id="deleteTodo", status_code=204)
+@app.delete(
+    "/todos/{todo_id}", tags=["todos"], operation_id="deleteTodo", status_code=204
+)
 def delete_todo(todo_id: int, _: Annotated[str, Depends(authed)]) -> None:
     TODOS.pop(todo_id, None)
 
@@ -112,7 +118,9 @@ async def attach_file(
     note: Annotated[str | None, Form()] = None,
 ) -> Attachment:
     content = await file.read()
-    return Attachment(todo_id=todo_id, filename=file.filename or "", size=len(content), note=note)
+    return Attachment(
+        todo_id=todo_id, filename=file.filename or "", size=len(content), note=note
+    )
 
 
 @app.post(
@@ -123,7 +131,11 @@ async def attach_file(
     responses={
         200: {
             "description": "Progress events.",
-            "content": {"text/event-stream": {"itemSchema": {"$ref": "#/components/schemas/Progress"}}},
+            "content": {
+                "text/event-stream": {
+                    "itemSchema": {"$ref": "#/components/schemas/Progress"}
+                }
+            },
         }
     },
 )

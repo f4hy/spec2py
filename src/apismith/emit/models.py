@@ -100,6 +100,12 @@ def _module(
     return body
 
 
+def _field_names(decls: list[PModel | PAlias]) -> set[str]:
+    """Field names shadow module names in their class's annotations (PEP 649), so
+    an import that collides with one (a field called ``datetime``) gets an alias."""
+    return {f.py_name for d in decls if isinstance(d, PModel) for f in d.fields}
+
+
 def _link(imports: Imports) -> ast.stmt:
     return ast.Expr(
         call(ast.Name(imports.name(RUNTIME, "link_models")), call("globals"))
@@ -111,7 +117,11 @@ def emit_models(plan: Plan) -> dict[str, ast.Module]:
     if len(plan.models) > SPLIT_THRESHOLD:
         return _emit_split(plan)
     names = [m.name for m in plan.models]
-    imports = Imports(package=plan.client.package, here=MODELS, reserved=names)
+    imports = Imports(
+        package=plan.client.package,
+        here=MODELS,
+        reserved=[*names, *_field_names(plan.models)],
+    )
     body = _module(plan, plan.models, imports)
     header: list[ast.stmt] = [
         doc_expr(f"Models for the {plan.client.api_name}."),
@@ -197,7 +207,9 @@ def _emit_split(plan: Plan) -> dict[str, ast.Module]:
     for chunk, decls in sorted(chunks.items()):
         own = [d.name for d in decls]
         imports = Imports(
-            package=plan.client.package, here=f"models.{chunk}", reserved=own
+            package=plan.client.package,
+            here=f"models.{chunk}",
+            reserved=[*own, *_field_names(decls)],
         )
         imports.model_modules = layout
         body = _module(plan, decls, imports)

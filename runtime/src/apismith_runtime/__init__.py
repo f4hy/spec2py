@@ -37,6 +37,7 @@ from ._models import (
     build_body,
     jsonable,
     parse_value,
+    rebuild_models,
     validate_param,
 )
 from ._pagination import (
@@ -146,6 +147,7 @@ __all__ = [
     "jsonable",
     "parse_value",
     "path_template",
+    "rebuild_models",
     "to_raw_response_wrapper",
     "validate_param",
 ]

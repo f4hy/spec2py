@@ -25,6 +25,7 @@ __all__ = [
     "build_body",
     "jsonable",
     "parse_value",
+    "rebuild_models",
     "validate_param",
 ]
 
@@ -208,3 +209,19 @@ def jsonable(value: object) -> object:
             return [jsonable(v) for v in cast(list[object], value)]
         case _:
             return pydantic_core.to_jsonable_python(value)
+
+
+def rebuild_models(namespace: Mapping[str, object]) -> None:
+    """Resolve forward references for every model defined in a generated module.
+
+    Called once at the bottom of ``models.py`` with ``globals()``, after all
+    classes and type aliases exist, so recursive and out-of-order references work.
+    """
+    module = namespace.get("__name__")
+    for value in list(namespace.values()):
+        if (
+            isinstance(value, type)
+            and issubclass(value, pydantic.BaseModel)
+            and value.__module__ == module
+        ):
+            value.model_rebuild()

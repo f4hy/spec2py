@@ -64,7 +64,10 @@ class NextPage:
 
 
 class PaginationStrategy(Protocol):
-    items: str | None
+    @property
+    def items(self) -> str | None:
+        """Dotted path to the item array in the body (``None``: the body is the array)."""
+        ...
 
     def next_page(self, state: PageState) -> NextPage | None: ...
 

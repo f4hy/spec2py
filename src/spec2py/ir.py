@@ -2,7 +2,7 @@
 
 Built from a normalized OpenAPI 3.1 document. Every later stage reads only the
 IR, never raw YAML, so the IR can be snapshot-tested on its own
-(``apismith ir spec.yaml`` prints it as JSON).
+(``spec2py ir spec.yaml`` prints it as JSON).
 """
 
 import dataclasses

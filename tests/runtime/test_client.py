@@ -3,7 +3,7 @@ import json
 import httpx2
 import pytest
 
-from apismith_runtime import (
+from spec2py_runtime import (
     NOT_GIVEN,
     APIConnectionError,
     APIResponseValidationError,
@@ -20,7 +20,7 @@ from apismith_runtime import (
     build_body,
     to_raw_response_wrapper,
 )
-from apismith_runtime._response import APIResponse
+from spec2py_runtime._response import APIResponse
 
 from .helpers import Item, Recorder, async_client, client, ok
 
@@ -62,7 +62,7 @@ def test_builds_url_query_headers_and_json_body() -> None:
     assert req.headers["idempotency-key"] == "k1"
     assert req.headers["x-extra"] == "e"
     assert "x-absent" not in req.headers
-    assert req.headers["user-agent"].startswith("apismith-client/")
+    assert req.headers["user-agent"].startswith("spec2py-client/")
     assert json.loads(req.content) == {"name": "n", "more": True}
 
 
@@ -196,7 +196,7 @@ def test_retries_post_with_generated_idempotency_key_reused_across_attempts() ->
     keys = [r.headers["idempotency-key"] for r in rec.requests]
     assert len(keys) == 2
     assert keys[0] == keys[1]
-    assert keys[0].startswith("apismith-retry-")
+    assert keys[0].startswith("spec2py-retry-")
 
 
 def test_caller_idempotency_key_wins() -> None:
@@ -322,7 +322,7 @@ def test_per_call_timeout() -> None:
 
 
 def test_security_false_skips_auth() -> None:
-    from apismith_runtime import BearerAuth
+    from spec2py_runtime import BearerAuth
 
     rec = Recorder([ok({"id": "1"})])
     c = client(rec, auth=BearerAuth("tok"))
@@ -340,7 +340,7 @@ def test_context_manager_closes_owned_client() -> None:
 
 
 def test_user_supplied_http_client_is_not_closed() -> None:
-    from apismith_runtime import APIClient
+    from spec2py_runtime import APIClient
 
     http = httpx2.Client(transport=httpx2.MockTransport(Recorder([ok({"id": "1"})])))
     with APIClient(base_url="https://api.test", http_client=http) as c:

@@ -1,7 +1,7 @@
 """The public API surface of a generated client, diffs between two surfaces, and semver advice.
 
 The surface is recorded in the generated package's manifest, so
-``apismith update`` can say exactly what changed since the last generation and
+``spec2py update`` can say exactly what changed since the last generation and
 whether that is breaking.
 """
 

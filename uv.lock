@@ -8,8 +8,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "apismith",
-    "apismith-runtime",
+    "spec2py",
+    "spec2py-runtime",
 ]
 
 [[package]]
@@ -44,10 +44,10 @@ wheels = [
 ]
 
 [[package]]
-name = "apismith"
+name = "spec2py"
 source = { editable = "." }
 dependencies = [
-    { name = "apismith-runtime" },
+    { name = "spec2py-runtime" },
     { name = "pyyaml" },
     { name = "ruff" },
 ]
@@ -73,7 +73,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "apismith-runtime", editable = "runtime" },
+    { name = "spec2py-runtime", editable = "runtime" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.120" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.15.0" },
@@ -95,7 +95,7 @@ dev = [
 ]
 
 [[package]]
-name = "apismith-runtime"
+name = "spec2py-runtime"
 source = { editable = "runtime" }
 dependencies = [
     { name = "anyio" },

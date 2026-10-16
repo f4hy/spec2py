@@ -66,7 +66,7 @@ __all__ = [
     "RequestSpec",
 ]
 
-logger = logging.getLogger("apismith")
+logger = logging.getLogger("spec2py")
 
 DEFAULT_TIMEOUT: Final = httpx2.Timeout(60.0, connect=5.0)
 DEFAULT_MAX_RETRIES: Final = 2
@@ -156,13 +156,13 @@ def _otel_tracer() -> Any:
         from opentelemetry import trace
     except ImportError:
         return None
-    return trace.get_tracer("apismith_runtime")
+    return trace.get_tracer("spec2py_runtime")
 
 
 class _BaseClient:
     """Request building, parsing and error mapping shared by both clients."""
 
-    _package: str = "apismith-client"
+    _package: str = "spec2py-client"
     _version: str = "0"
 
     def __init__(
@@ -196,7 +196,7 @@ class _BaseClient:
         from . import __version__
 
         return (
-            f"{self._package}/{self._version} apismith-runtime/{__version__} "
+            f"{self._package}/{self._version} spec2py-runtime/{__version__} "
             f"python/{platform.python_version()}"
         )
 
@@ -313,7 +313,7 @@ class _BaseClient:
 
     def _new_idempotency_key(self, spec: RequestSpec) -> str | None:
         if self.idempotency_header and spec.method.upper() not in {"GET", "HEAD"}:
-            return f"apismith-retry-{uuid.uuid4()}"
+            return f"spec2py-retry-{uuid.uuid4()}"
         return None
 
     def _auth_for(self, spec: RequestSpec) -> httpx2.Auth | None:

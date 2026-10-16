@@ -5,11 +5,11 @@ import shutil
 import pytest
 import yaml
 
-from apismith.cli import main
-from apismith.config import ConfigError, load_config
-from apismith.lint import lint
-from apismith.pipeline import load_api
-from apismith.surface import diff_surfaces, suggest_version
+from spec2py.cli import main
+from spec2py.config import ConfigError, load_config
+from spec2py.lint import lint
+from spec2py.pipeline import load_api
+from spec2py.surface import diff_surfaces, suggest_version
 
 
 def write_project(
@@ -17,7 +17,7 @@ def write_project(
 ) -> pathlib.Path:
     shutil.copy(specs / "acme.yaml", tmp_path / "acme.yaml")
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.apismith]\n"
+        "[tool.spec2py]\n"
         'spec = "acme.yaml"\n'
         'output = "client"\n'
         'layout = "package"\n' + extra
@@ -78,9 +78,9 @@ def test_config_from_pyproject(tmp_path: pathlib.Path, specs: pathlib.Path) -> N
         specs,
         'client-name = "AcmeClient"\n'
         'overlays = ["fix.yaml"]\n'
-        '[tool.apismith.rename-models]\nInvoice = "Bill"\n'
-        '[tool.apismith.operations."GET /invoices"]\nname = "all"\npagination = false\n'
-        "[tool.apismith.operations.exportEvents]\nexclude = true\n",
+        '[tool.spec2py.rename-models]\nInvoice = "Bill"\n'
+        '[tool.spec2py.operations."GET /invoices"]\nname = "all"\npagination = false\n'
+        "[tool.spec2py.operations.exportEvents]\nexclude = true\n",
     )
     (project / "fix.yaml").write_text(
         "overlay: 1.0.0\ninfo: {title: f, version: '1'}\nactions: []\n"
@@ -100,15 +100,15 @@ def test_config_from_pyproject(tmp_path: pathlib.Path, specs: pathlib.Path) -> N
     ("snippet", "message"),
     [
         ("bogus = 1\n", "unknown key"),
-        ('[tool.apismith.operations.x]\nstream = "websocket"\n', "stream"),
+        ('[tool.spec2py.operations.x]\nstream = "websocket"\n', "stream"),
         (
-            '[tool.apismith.operations.x]\npagination = { style = "magic" }\n',
+            '[tool.spec2py.operations.x]\npagination = { style = "magic" }\n',
             "pagination.style",
         ),
     ],
 )
 def test_config_errors(tmp_path: pathlib.Path, snippet: str, message: str) -> None:
-    (tmp_path / "pyproject.toml").write_text("[tool.apismith]\n" + snippet)
+    (tmp_path / "pyproject.toml").write_text("[tool.spec2py]\n" + snippet)
     with pytest.raises(ConfigError, match=message):
         load_config(tmp_path / "pyproject.toml")
 
@@ -320,4 +320,4 @@ def test_score_and_ir_commands(
 def test_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert capsys.readouterr().out.startswith("apismith ")
+    assert capsys.readouterr().out.startswith("spec2py ")

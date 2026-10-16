@@ -3,9 +3,9 @@ from typing import Any
 
 import pytest
 
-from apismith.build_ir import build_ir
-from apismith.config import Config, OperationConfig, PaginationConfig
-from apismith.naming import (
+from spec2py.build_ir import build_ir
+from spec2py.config import Config, OperationConfig, PaginationConfig
+from spec2py.naming import (
     NameRegistry,
     camel_words,
     pascal,
@@ -13,9 +13,9 @@ from apismith.naming import (
     singular,
     snake,
 )
-from apismith.normalize import normalize
-from apismith.pipeline import load_api
-from apismith.plan import PAlias, Plan, PMethod, PModel, plan_api
+from spec2py.normalize import normalize
+from spec2py.pipeline import load_api
+from spec2py.plan import PAlias, Plan, PMethod, PModel, plan_api
 
 
 def plan_of(doc: dict[str, Any], **config: Any) -> Plan:

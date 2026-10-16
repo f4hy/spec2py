@@ -5,7 +5,7 @@ import pathlib
 
 import httpx2
 
-from apismith_runtime import (
+from spec2py_runtime import (
     NOT_GIVEN,
     ApiKeyAuth,
     BasicAuth,
@@ -14,8 +14,8 @@ from apismith_runtime import (
     OAuth2ClientCredentials,
     path_template,
 )
-from apismith_runtime._files import to_httpx_files, to_multipart_data
-from apismith_runtime._qs import encode_query, query_param
+from spec2py_runtime._files import to_httpx_files, to_multipart_data
+from spec2py_runtime._qs import encode_query, query_param
 
 from .helpers import Item, Recorder, async_client, client, ok
 

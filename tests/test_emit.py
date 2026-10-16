@@ -1,6 +1,6 @@
 """Golden snapshots, determinism and regeneration safety of generated packages.
 
-Set ``APISMITH_UPDATE_GOLDEN=1`` to rewrite the snapshots after a deliberate
+Set ``SPEC2PY_UPDATE_GOLDEN=1`` to rewrite the snapshots after a deliberate
 change in output; the diff then shows up in review.
 """
 
@@ -10,10 +10,10 @@ import pathlib
 
 import pytest
 
-from apismith import generate
-from apismith.config import Config
-from apismith.emit.package import MANIFEST, render_package
-from apismith.pipeline import load_api
+from spec2py import generate
+from spec2py.config import Config
+from spec2py.emit.package import MANIFEST, render_package
+from spec2py.pipeline import load_api
 
 from .conftest import generate_package
 
@@ -38,7 +38,7 @@ def test_golden_output(spec: str, specs: pathlib.Path, tmp_path: pathlib.Path) -
     package = generate_package(specs / spec, tmp_path)
     actual = snapshot(package)
     golden = GOLDEN / spec.split(".", maxsplit=1)[0]
-    if os.environ.get("APISMITH_UPDATE_GOLDEN") or not golden.exists():
+    if os.environ.get("SPEC2PY_UPDATE_GOLDEN") or not golden.exists():
         for old in golden.rglob("*") if golden.exists() else []:
             if old.is_file():
                 old.unlink()

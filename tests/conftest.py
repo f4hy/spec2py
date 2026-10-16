@@ -6,8 +6,8 @@ from types import ModuleType
 
 import pytest
 
-from apismith import generate
-from apismith.config import Config
+from spec2py import generate
+from spec2py.config import Config
 
 SPECS = pathlib.Path(__file__).parent / "specs"
 ROOT = pathlib.Path(__file__).parent.parent

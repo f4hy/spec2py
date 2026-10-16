@@ -392,7 +392,7 @@ class _Builder:
             if prop.name in required:
                 prop.required = True
         if required - {p.name for p in obj.properties}:
-            obj.extensions["x-apismith-required-inherited"] = sorted(
+            obj.extensions["x-spec2py-required-inherited"] = sorted(
                 required - {p.name for p in obj.properties}
             )
         if not obj.properties and len(obj.bases) == 1 and obj.additional is None:

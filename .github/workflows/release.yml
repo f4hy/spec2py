@@ -3,7 +3,7 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - 'v*' # e.g. v0.1.0 publishes apismith and apismith-runtime at 0.1.0
+      - 'v*' # e.g. v0.1.0 publishes spec2py and spec2py-runtime at 0.1.0
 
 jobs:
   build-and-publish:
@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
 
-    # Required for PyPI Trusted Publishing (OIDC). Both projects, apismith and
-    # apismith-runtime, need this repository configured as a trusted publisher.
+    # Required for PyPI Trusted Publishing (OIDC). Both projects, spec2py and
+    # spec2py-runtime, need this repository configured as a trusted publisher.
     permissions:
       id-token: write
       contents: read

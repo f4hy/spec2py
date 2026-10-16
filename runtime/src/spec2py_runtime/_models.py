@@ -30,8 +30,8 @@ __all__ = [
     "validate_param",
 ]
 
-_STRICT_CONTEXT: Final = {"apismith_strict": True}
-logger = logging.getLogger("apismith")
+_STRICT_CONTEXT: Final = {"spec2py_strict": True}
+logger = logging.getLogger("spec2py")
 
 
 class BaseModel(pydantic.BaseModel):
@@ -68,7 +68,7 @@ def _tolerate(value: object, handler: Any, info: ValidationInfo) -> object:
     try:
         return handler(value)
     except ValidationError:
-        if info.context and info.context.get("apismith_strict"):
+        if info.context and info.context.get("spec2py_strict"):
             raise
         return value
 

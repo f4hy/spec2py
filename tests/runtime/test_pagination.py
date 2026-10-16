@@ -1,7 +1,7 @@
 import httpx2
 import pytest
 
-from apismith_runtime import (
+from spec2py_runtime import (
     CursorPagination,
     LinkHeaderPagination,
     OffsetPagination,

@@ -1,10 +1,10 @@
-"""apismith: a Python-only OpenAPI client generator.
+"""spec2py: a Python-only OpenAPI client generator.
 
 The pipeline is a compiler with five stages::
 
     load -> normalize -> IR -> plan -> emit
 
-Use the ``apismith`` command, or call :func:`generate` from Python.
+Use the ``spec2py`` command, or call :func:`generate` from Python.
 """
 
 try:

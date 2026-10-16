@@ -3,8 +3,8 @@ from typing import Any
 
 import pytest
 
-from apismith.jsonpath import JSONPathError, find
-from apismith.overlay import OverlayError, apply_overlay
+from spec2py.jsonpath import JSONPathError, find
+from spec2py.overlay import OverlayError, apply_overlay
 
 DOC: dict[str, Any] = {
     "paths": {

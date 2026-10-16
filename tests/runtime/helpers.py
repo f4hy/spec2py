@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import httpx2
 
-from apismith_runtime import APIClient, AsyncAPIClient, BaseModel, RetryPolicy
+from spec2py_runtime import APIClient, AsyncAPIClient, BaseModel, RetryPolicy
 
 type Handler = Callable[[httpx2.Request], httpx2.Response]
 

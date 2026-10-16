@@ -1,8 +1,8 @@
 import httpx2
 import pytest
 
-from apismith_runtime import APIStatusError, BaseModel, NotFoundError, SSEDecoder
-from apismith_runtime._streaming import ServerSentEvent
+from spec2py_runtime import APIStatusError, BaseModel, NotFoundError, SSEDecoder
+from spec2py_runtime._streaming import ServerSentEvent
 
 from .helpers import Recorder, async_client, client
 

@@ -2,8 +2,8 @@
 /corpus/specs/
 
 # Generated at build time by hatch-vcs from the git tag
-/src/apismith/_version.py
-/runtime/src/apismith_runtime/_version.py
+/src/spec2py/_version.py
+/runtime/src/spec2py_runtime/_version.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

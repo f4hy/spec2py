@@ -10,11 +10,11 @@ from typing import Any
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from apismith.build_ir import build_ir
-from apismith.config import Config
-from apismith.emit.package import render_package
-from apismith.normalize import normalize
-from apismith.plan import plan_api
+from spec2py.build_ir import build_ir
+from spec2py.config import Config
+from spec2py.emit.package import render_package
+from spec2py.normalize import normalize
+from spec2py.plan import plan_api
 
 from .conftest import import_generated
 

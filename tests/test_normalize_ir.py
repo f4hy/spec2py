@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from apismith.build_ir import build_ir
-from apismith.ir import API, Kind, to_jsonable
-from apismith.loader import LoadError, load_spec, parse_document
-from apismith.normalize import (
+from spec2py.build_ir import build_ir
+from spec2py.ir import API, Kind, to_jsonable
+from spec2py.loader import LoadError, load_spec, parse_document
+from spec2py.normalize import (
     NormalizeError,
     normalize,
     swagger2_to_openapi3,
@@ -155,7 +155,7 @@ def test_ir_snapshot(specs: pathlib.Path) -> None:
         + "\n"
     )
     golden = GOLDEN / "acme.ir.json"
-    if os.environ.get("APISMITH_UPDATE_GOLDEN") or not golden.exists():
+    if os.environ.get("SPEC2PY_UPDATE_GOLDEN") or not golden.exists():
         golden.parent.mkdir(exist_ok=True)
         golden.write_text(actual)
     assert actual == golden.read_text()

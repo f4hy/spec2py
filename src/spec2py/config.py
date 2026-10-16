@@ -1,8 +1,8 @@
-"""Generator configuration, read from ``[tool.apismith]`` in ``pyproject.toml``.
+"""Generator configuration, read from ``[tool.spec2py]`` in ``pyproject.toml``.
 
 ::
 
-    [tool.apismith]
+    [tool.spec2py]
     spec = "https://api.acme.com/openapi.json"
     output = "clients/acme"
     package = "acme"
@@ -12,15 +12,15 @@
     exclude-paths = ["/internal/*"]
     idempotency-header = "Idempotency-Key"
 
-    [tool.apismith.rename-models]
+    [tool.spec2py.rename-models]
     InvoiceDTO = "Invoice"
 
-    [tool.apismith.operations."GET /invoices"]
+    [tool.spec2py.operations."GET /invoices"]
     name = "list"
     resource = "invoices"
     pagination = { style = "cursor", items = "data", cursor-param = "after", next-cursor = "last_id" }
 
-    [tool.apismith.operations.createCompletion]
+    [tool.spec2py.operations.createCompletion]
     stream = "sse"
 
 Keys may be written kebab-case or snake_case.
@@ -160,7 +160,7 @@ def _operation(raw: Mapping[str, Any], where: str) -> OperationConfig:
 
 def config_from_table(table: Mapping[str, Any], base_dir: pathlib.Path) -> Config:
     data = _snake(table)
-    _check_keys(data, Config, "[tool.apismith]")
+    _check_keys(data, Config, "[tool.spec2py]")
     for key in ("overlays", "exclude_paths", "include_tags", "exclude_tags"):
         if key in data:
             data[key] = tuple(data[key])
@@ -173,7 +173,7 @@ def config_from_table(table: Mapping[str, Any], base_dir: pathlib.Path) -> Confi
     if spec and not is_url(spec) and (base_dir / spec).exists():
         data["spec"] = str(base_dir / spec)
     data["operations"] = {
-        key: _operation(value, f"[tool.apismith.operations.{key!r}]")
+        key: _operation(value, f"[tool.spec2py.operations.{key!r}]")
         for key, value in dict(data.get("operations", {})).items()
     }
     data["base_dir"] = base_dir
@@ -193,7 +193,7 @@ def load_config(pyproject: pathlib.Path | None = None) -> Config:
         return Config()
     with pyproject.open("rb") as f:
         document = tomllib.load(f)
-    table = document.get("tool", {}).get("apismith")
+    table = document.get("tool", {}).get("spec2py")
     if table is None:
         return Config(base_dir=pyproject.parent)
     return config_from_table(table, pyproject.parent)

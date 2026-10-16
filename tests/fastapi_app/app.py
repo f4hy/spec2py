@@ -1,6 +1,6 @@
 """A small FastAPI service used for the one-command round-trip test.
 
-``apismith fastapi tests.fastapi_app.app:app`` must produce a client that can
+``spec2py fastapi tests.fastapi_app.app:app`` must produce a client that can
 call this exact app (through an ASGI transport) with every feature working.
 """
 

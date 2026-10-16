@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 import pytest
 from pydantic import Field, ValidationError
 
-from apismith_runtime import (
+from spec2py_runtime import (
     NOT_GIVEN,
     BaseModel,
     NotGiven,
@@ -133,7 +133,7 @@ def test_link_models_resolves_cross_module_references() -> None:
     sub = types.ModuleType("fakepkg.models._a")
     sys.modules["fakepkg.models._a"] = sub
     exec(
-        "from apismith_runtime import BaseModel\n"
+        "from spec2py_runtime import BaseModel\n"
         "class A(BaseModel):\n"
         "    b: B | None = None\n",
         sub.__dict__,
@@ -141,7 +141,7 @@ def test_link_models_resolves_cross_module_references() -> None:
     sub_b = types.ModuleType("fakepkg.models._b")
     sys.modules["fakepkg.models._b"] = sub_b
     exec(
-        "from apismith_runtime import BaseModel\nclass B(BaseModel):\n    x: int\n",
+        "from spec2py_runtime import BaseModel\nclass B(BaseModel):\n    x: int\n",
         sub_b.__dict__,
     )
     namespace = {

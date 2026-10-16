@@ -22,7 +22,7 @@ __all__ = [
     "to_raw_response_wrapper",
 ]
 
-_RAW_RESPONSE: Final = contextvars.ContextVar("apismith_raw_response", default=False)
+_RAW_RESPONSE: Final = contextvars.ContextVar("spec2py_raw_response", default=False)
 
 
 def raw_response_requested() -> bool:

@@ -2,7 +2,7 @@
 
 Every finding says what the generator will do about it. Mechanical problems
 (missing operationIds, an obvious discriminator) can be fixed by a starter
-Overlay that ``apismith lint --fix-overlay`` writes.
+Overlay that ``spec2py lint --fix-overlay`` writes.
 """
 
 import json
@@ -60,7 +60,7 @@ class LintReport:
         fixable = sum(1 for f in self.findings if f.fix)
         if fixable:
             lines.append(
-                f"\n{fixable} finding(s) can be fixed mechanically: apismith lint --fix-overlay fixes.yaml"
+                f"\n{fixable} finding(s) can be fixed mechanically: spec2py lint --fix-overlay fixes.yaml"
             )
         return "\n".join(lines)
 
@@ -83,7 +83,7 @@ class LintReport:
         actions = [a for f in self.ranked() for a in f.fix]
         return {
             "overlay": "1.0.0",
-            "info": {"title": f"apismith fixes for {title}", "version": "1.0.0"},
+            "info": {"title": f"spec2py fixes for {title}", "version": "1.0.0"},
             "actions": actions,
         }
 

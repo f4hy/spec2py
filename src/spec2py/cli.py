@@ -1,14 +1,14 @@
-"""The ``apismith`` command line.
+"""The ``spec2py`` command line.
 
 ::
 
-    apismith generate openapi.yaml -o clients/acme
-    apismith fastapi myapp.main:app -o clients/myapp
-    apismith lint openapi.yaml --fix-overlay fixes.yaml
-    apismith update            # re-pull, diff the API, suggest a version
-    apismith update --check    # CI: fail if the committed client is stale
-    apismith diff old.yaml new.yaml
-    apismith score openapi.yaml
+    spec2py generate openapi.yaml -o clients/acme
+    spec2py fastapi myapp.main:app -o clients/myapp
+    spec2py lint openapi.yaml --fix-overlay fixes.yaml
+    spec2py update            # re-pull, diff the API, suggest a version
+    spec2py update --check    # CI: fail if the committed client is stale
+    spec2py diff old.yaml new.yaml
+    spec2py score openapi.yaml
 """
 
 import argparse
@@ -65,7 +65,7 @@ def _config(args: argparse.Namespace) -> Config:
 def _spec(args: argparse.Namespace, config: Config) -> str:
     spec = getattr(args, "spec", None) or config.spec
     if not spec:
-        raise CLIError("no spec given: pass one or set `spec` in [tool.apismith]")
+        raise CLIError("no spec given: pass one or set `spec` in [tool.spec2py]")
     return str(spec)
 
 
@@ -73,7 +73,7 @@ def _add_generation_options(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "-o",
         "--output",
-        help="output directory (default: [tool.apismith] output, or ./client)",
+        help="output directory (default: [tool.spec2py] output, or ./client)",
     )
     p.add_argument(
         "--package", help="Python package name (default: from the API title)"
@@ -103,7 +103,7 @@ def _add_generation_options(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--overlay", action="append", help="Overlay document to apply (repeatable)"
     )
-    p.add_argument("--config", help="pyproject.toml to read [tool.apismith] from")
+    p.add_argument("--config", help="pyproject.toml to read [tool.spec2py] from")
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
@@ -131,7 +131,7 @@ def _check(spec: str, config: Config) -> int:
     """Regenerate into a temp dir and compare with what's on disk."""
     pipeline = load_api(spec, config)
     current = package_dir(pipeline.plan, config.output)
-    with tempfile.TemporaryDirectory(prefix="apismith-check-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="spec2py-check-") as tmp:
         fresh_root = pathlib.Path(tmp)
         generate(spec, fresh_root, config)
         fresh = package_dir(pipeline.plan, fresh_root)
@@ -161,7 +161,7 @@ def _check(spec: str, config: Config) -> int:
         for rel in stale:
             print(f"  {rel}", file=sys.stderr)
         print(
-            "Run `apismith update` (or `apismith generate`) to regenerate.",
+            "Run `spec2py update` (or `spec2py generate`) to regenerate.",
             file=sys.stderr,
         )
         return 1
@@ -247,13 +247,11 @@ def card_text(card: dict[str, object]) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="apismith",
+        prog="spec2py",
         description="Generate first-class Python clients from OpenAPI specs.",
         suggest_on_error=True,
     )
-    parser.add_argument(
-        "--version", action="version", version=f"apismith {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"spec2py {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("generate", help="generate a client package")
@@ -346,7 +344,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         OverlayError,
         RefError,
     ) as exc:
-        print(f"apismith: error: {exc}", file=sys.stderr)
+        print(f"spec2py: error: {exc}", file=sys.stderr)
         return 2
 
 

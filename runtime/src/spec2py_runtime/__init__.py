@@ -1,4 +1,4 @@
-"""Runtime for apismith-generated API clients.
+"""Runtime for spec2py-generated API clients.
 
 Generated packages import from here; end users mostly touch the error classes,
 ``NOT_GIVEN``, the auth helpers and ``Hooks``.

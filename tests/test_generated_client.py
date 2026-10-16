@@ -195,7 +195,7 @@ def test_auth_from_environment_and_base_url(client: Any, server: AcmeServer) -> 
     req = server.requests[0]
     assert req.headers["authorization"] == "Bearer sk_test"
     assert str(req.url) == "https://api.acme.test/v1/invoices/inv_1"
-    assert req.headers["user-agent"].startswith("acme/0.1.0 apismith-runtime/")
+    assert req.headers["user-agent"].startswith("acme/0.1.0 spec2py-runtime/")
 
 
 def test_explicit_credentials_and_base_url_override(

@@ -24,7 +24,7 @@ def scorecard(
     pipeline = load_api(source, config)
     plan = pipeline.plan
     methods = [m for r in plan.resources for m in r.methods]
-    with tempfile.TemporaryDirectory(prefix="apismith-score-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="spec2py-score-") as tmp:
         out = pathlib.Path(tmp)
         generated = generate(source, out, config.replace(layout="package"))
         py_files = {k: v for k, v in generated.files.items() if k.endswith(".py")}

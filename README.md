@@ -1,4 +1,4 @@
-# apismith
+# spec2py
 
 A Python-only OpenAPI client generator aimed at the quality of the best
 commercial SDKs. You get Pydantic v2 models, an [httpx2](https://github.com/pydantic/httpx2)
@@ -6,8 +6,8 @@ runtime, sync and async clients generated from one source, and pagination,
 retries, streaming and uploads built in.
 
 ```console
-$ uvx apismith generate https://api.acme.com/openapi.json -o clients/acme
-$ uvx --with fastapi apismith fastapi myapp.main:app -o clients/myapp
+$ uvx spec2py generate https://api.acme.com/openapi.json -o clients/acme
+$ uvx --with fastapi spec2py fastapi myapp.main:app -o clients/myapp
 ```
 
 ```python
@@ -54,7 +54,7 @@ Requires Python 3.14.
   status.
 - **Runtime behaviour that's fixed by upgrading, not regenerating.** Retries,
   auth, pagination, streaming and uploads live in
-  [`apismith-runtime`](runtime/README.md), not in generated code.
+  [`spec2py-runtime`](runtime/README.md), not in generated code.
 - **Deterministic output.** The same spec and config produce byte-identical
   files, so diffs in review mean something.
 
@@ -62,13 +62,13 @@ Requires Python 3.14.
 
 | Command | What it does |
 | --- | --- |
-| `apismith generate [SPEC]` | Generate a client from a file, URL or `module:app`. `--check` fails if the client on disk is stale. |
-| `apismith fastapi module:app` | Same, from a FastAPI app, in one command. |
-| `apismith lint [SPEC]` | Explains what will generate poorly, ranked by impact. `--fix-overlay fixes.yaml` writes a starter Overlay for the mechanical fixes. |
-| `apismith update` | Regenerates, prints the API diff (breaking changes flagged) and suggests a semver bump. `--check` is for CI. |
-| `apismith diff OLD NEW` | Compares the client API two specs would produce. `--fail-on-breaking`. |
-| `apismith score [SPEC]` | Quality scorecard: size, documentation, detected pagination and streaming, approximations, and `--typecheck`. |
-| `apismith ir [SPEC]` | Prints the IR (or the normalized spec) as JSON, for debugging. |
+| `spec2py generate [SPEC]` | Generate a client from a file, URL or `module:app`. `--check` fails if the client on disk is stale. |
+| `spec2py fastapi module:app` | Same, from a FastAPI app, in one command. |
+| `spec2py lint [SPEC]` | Explains what will generate poorly, ranked by impact. `--fix-overlay fixes.yaml` writes a starter Overlay for the mechanical fixes. |
+| `spec2py update` | Regenerates, prints the API diff (breaking changes flagged) and suggests a semver bump. `--check` is for CI. |
+| `spec2py diff OLD NEW` | Compares the client API two specs would produce. `--fail-on-breaking`. |
+| `spec2py score [SPEC]` | Quality scorecard: size, documentation, detected pagination and streaming, approximations, and `--typecheck`. |
+| `spec2py ir [SPEC]` | Prints the IR (or the normalized spec) as JSON, for debugging. |
 
 ## Inputs
 
@@ -87,7 +87,7 @@ input:
 - **Config** in `pyproject.toml`:
 
 ```toml
-[tool.apismith]
+[tool.spec2py]
 spec = "https://api.acme.com/openapi.json"
 output = "clients/acme"
 package = "acme"
@@ -98,15 +98,15 @@ exclude-paths = ["/internal/*"]
 idempotency-header = "Idempotency-Key"
 package-version = "1.4.0"
 
-[tool.apismith.rename-models]
+[tool.spec2py.rename-models]
 InvoiceDTO = "Invoice"
 
-[tool.apismith.operations."GET /invoices"]
+[tool.spec2py.operations."GET /invoices"]
 name = "list"
 resource = "invoices"
 pagination = { style = "cursor", items = "data", cursor-param = "after", next-cursor = "last_id" }
 
-[tool.apismith.operations.createCompletion]
+[tool.spec2py.operations.createCompletion]
 stream = "sse"
 ```
 
@@ -133,7 +133,7 @@ previous stage's output:
 2. **Normalize**: Swagger 2.0 and OpenAPI 3.0 are rewritten into 3.1 semantics,
    and external `$ref`s are bundled.
 3. **Model IR**: a typed, language-neutral graph of schemas, operations and
-   security schemes (`apismith ir` prints it).
+   security schemes (`spec2py ir` prints it).
 4. **Plan**: names, the schema-to-Python type mapping, resource grouping,
    signatures, and pagination and streaming detection.
 5. **Emit**: Python AST (never string templates), formatted by ruff. `NOTES.md`
@@ -171,10 +171,10 @@ uv sync --all-packages      # generator + runtime (uv workspace) + dev tools
 uv run pytest -q            # ~230 tests, including strict type checks of generated clients
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyright
 uv run corpus/run.py --gates   # real-world specs (Stripe, GitHub, OpenAI, Twilio...) + scorecard
-APISMITH_UPDATE_GOLDEN=1 uv run pytest tests/test_emit.py tests/test_normalize_ir.py  # accept output changes
+SPEC2PY_UPDATE_GOLDEN=1 uv run pytest tests/test_emit.py tests/test_normalize_ir.py  # accept output changes
 ```
 
-Releases: push a `v*` tag. CI builds `apismith` and `apismith-runtime` and
+Releases: push a `v*` tag. CI builds `spec2py` and `spec2py-runtime` and
 publishes both to PyPI through trusted publishing.
 
 ## License

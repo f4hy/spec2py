@@ -42,7 +42,7 @@ __all__ = [
     "plan_api",
 ]
 
-RUNTIME: Final = "apismith_runtime"
+RUNTIME: Final = "spec2py_runtime"
 MISSING: Final = object()
 
 _MODEL_RESERVED: Final = frozenset(
@@ -1206,7 +1206,7 @@ class _Planner:
             return None
         if oc.stream:
             return oc.stream
-        ext = op.extensions.get("x-stream") or op.extensions.get("x-apismith-stream")
+        ext = op.extensions.get("x-stream") or op.extensions.get("x-spec2py-stream")
         if ext in ("sse", "ndjson"):
             return cast(Literal["sse", "ndjson"], ext)
         if response is None:
@@ -1235,7 +1235,7 @@ class _Planner:
                 and media_rank(response.media_type) == 4
             ):
                 schema = response.schema
-            ext = method.operation.extensions.get("x-apismith-event")
+            ext = method.operation.extensions.get("x-spec2py-event")
             if isinstance(ext, str) and ext in self.component_names:
                 schema = Schema(Kind.REF, ref=ext)
         if (

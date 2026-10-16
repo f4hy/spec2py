@@ -226,7 +226,7 @@ class TUnion(TypeExpr):
         # None and NotGiven go last, as people write them.
         flat.sort(
             key=lambda t: (
-                2 if t == TName("NotGiven", "apismith_runtime") else int(t.is_none)
+                2 if t == TName("NotGiven", "spec2py_runtime") else int(t.is_none)
             )
         )
         return flat[0] if len(flat) == 1 else TUnion(tuple(flat))

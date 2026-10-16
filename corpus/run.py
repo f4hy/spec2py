@@ -22,8 +22,8 @@ from typing import Any
 
 import httpx2
 
-from apismith.config import Config
-from apismith.score import scorecard
+from spec2py.config import Config
+from spec2py.score import scorecard
 
 HERE = pathlib.Path(__file__).parent
 SPECS = HERE / "specs"
@@ -110,7 +110,7 @@ def main() -> int:
             card = scorecard(str(path), Config(layout="package"))
             if args.gates:
                 with tempfile.TemporaryDirectory() as tmp:
-                    from apismith import generate
+                    from spec2py import generate
 
                     generated = generate(str(path), tmp, Config(layout="package"))
                     card.update(gates(pathlib.Path(tmp) / generated.package))

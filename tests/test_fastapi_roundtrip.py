@@ -1,4 +1,4 @@
-"""One command from a FastAPI app to a working client: ``apismith fastapi module:app``."""
+"""One command from a FastAPI app to a working client: ``spec2py fastapi module:app``."""
 
 import pathlib
 from types import ModuleType
@@ -7,7 +7,7 @@ from typing import Any
 import httpx2
 import pytest
 
-from apismith.cli import main
+from spec2py.cli import main
 from tests.fastapi_app import app as app_module
 
 from .conftest import import_generated

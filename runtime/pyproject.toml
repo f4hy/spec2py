@@ -1,0 +1,47 @@
+[project]
+name = "apismith-runtime"
+dynamic = ["version"]
+description = "Runtime library for apismith-generated API clients: transport, retries, auth, pagination, streaming and uploads on httpx2 and Pydantic v2."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Brendan Fahy", email = "bmfahy@gmail.com" }]
+requires-python = ">=3.14"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
+dependencies = [
+    "anyio>=4.6",
+    "httpx2>=2.13",
+    "pydantic>=2.12",
+]
+
+[project.optional-dependencies]
+otel = ["opentelemetry-api>=1.30"]
+
+[project.urls]
+Homepage = "https://github.com/f4hy/apismith"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/apismith_runtime"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = ".."
+version_scheme = "no-guess-dev"
+fallback_version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/apismith_runtime/_version.py"

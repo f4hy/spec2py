@@ -873,9 +873,19 @@ class _Planner:
         self.note(f"`{op.key}` has no operationId; its method is named `{name}`.")
         return name
 
-    def plan_resources(self) -> list[PResource]:
+    def plan_resources(self, client_name: str) -> list[PResource]:
         resources: dict[str, PResource] = {}
         attr_names = NameRegistry(_CLIENT_RESERVED)
+        # Resource classes share ``_client.py`` with the client classes.
+        class_names = NameRegistry(
+            {
+                client_name,
+                f"{client_name}WithRawResponse",
+                "APIClient",
+                "AsyncAPIClient",
+                "Hooks",
+            }
+        )
         by_key: dict[str, str] = {}
         method_names: dict[str, NameRegistry] = {}
         for op in self.api.operations:
@@ -888,7 +898,9 @@ class _Planner:
                     safe_identifier(snake(key) or "default"), suffix="_resource"
                 )
                 by_key[key] = attr
-                class_name = safe_identifier(pascal(attr) or "Default")
+                class_name = class_names.claim(
+                    safe_identifier(pascal(attr) or "Default"), suffix="Resource"
+                )
                 custom = None
                 if attr in self.config.custom_resources:
                     module, _, klass = self.config.custom_resources[attr].partition(":")
@@ -1589,7 +1601,7 @@ class _Planner:
         for component in self.api.schemas:
             self.ensure_declared(component)
         client = self.plan_client()
-        resources = self.plan_resources()
+        resources = self.plan_resources(client.class_name)
         return Plan(
             client=client,
             models=self.ordered_models(),

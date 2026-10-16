@@ -18,10 +18,15 @@ from apismith_runtime import (
 
 from ..models import Note
 
-__all__ = ["AsyncNotes", "AsyncNotesWithRawResponse", "Notes", "NotesWithRawResponse"]
+__all__ = [
+    "AsyncNotesResource",
+    "AsyncNotesResourceWithRawResponse",
+    "NotesResource",
+    "NotesResourceWithRawResponse",
+]
 
 
-class Notes(APIResource):
+class NotesResource(APIResource):
     """Operations on notes."""
 
     def retrieve(
@@ -46,7 +51,7 @@ class Notes(APIResource):
         )
 
 
-class AsyncNotes(AsyncAPIResource):
+class AsyncNotesResource(AsyncAPIResource):
     """Operations on notes."""
 
     async def retrieve(
@@ -71,21 +76,21 @@ class AsyncNotes(AsyncAPIResource):
         )
 
 
-class NotesWithRawResponse:
+class NotesResourceWithRawResponse:
     """Like the resource, but each method returns an ``APIResponse`` with status,
     headers and a lazy ``parse()``. Paginated and streaming methods are omitted
     (their pages and streams already expose ``.response``), as are deprecated ones.
     """
 
-    def __init__(self, resource: Notes) -> None:
+    def __init__(self, resource: NotesResource) -> None:
         self.retrieve = to_raw_response_wrapper(resource.retrieve)
 
 
-class AsyncNotesWithRawResponse:
+class AsyncNotesResourceWithRawResponse:
     """Like the resource, but each method returns an ``APIResponse`` with status,
     headers and a lazy ``parse()``. Paginated and streaming methods are omitted
     (their pages and streams already expose ``.response``), as are deprecated ones.
     """
 
-    def __init__(self, resource: AsyncNotes) -> None:
+    def __init__(self, resource: AsyncNotesResource) -> None:
         self.retrieve = async_to_raw_response_wrapper(resource.retrieve)

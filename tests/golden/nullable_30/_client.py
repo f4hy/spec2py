@@ -18,10 +18,10 @@ from apismith_runtime import (
 
 from ._version import __version__
 from .resources.notes import (
-    AsyncNotes,
-    AsyncNotesWithRawResponse,
-    Notes,
-    NotesWithRawResponse,
+    AsyncNotesResource,
+    AsyncNotesResourceWithRawResponse,
+    NotesResource,
+    NotesResourceWithRawResponse,
 )
 
 __all__ = ["AsyncNotes", "AsyncNotesWithRawResponse", "Notes", "NotesWithRawResponse"]
@@ -75,8 +75,8 @@ class Notes(APIClient):
         )
 
     @cached_property
-    def notes(self) -> Notes:
-        return Notes(self)
+    def notes(self) -> NotesResource:
+        return NotesResource(self)
 
     @cached_property
     def with_raw_response(self) -> NotesWithRawResponse:
@@ -132,8 +132,8 @@ class AsyncNotes(AsyncAPIClient):
         )
 
     @cached_property
-    def notes(self) -> AsyncNotes:
-        return AsyncNotes(self)
+    def notes(self) -> AsyncNotesResource:
+        return AsyncNotesResource(self)
 
     @cached_property
     def with_raw_response(self) -> AsyncNotesWithRawResponse:
@@ -146,8 +146,8 @@ class NotesWithRawResponse:
         self._client = client
 
     @cached_property
-    def notes(self) -> NotesWithRawResponse:
-        return NotesWithRawResponse(self._client.notes)
+    def notes(self) -> NotesResourceWithRawResponse:
+        return NotesResourceWithRawResponse(self._client.notes)
 
 
 class AsyncNotesWithRawResponse:
@@ -155,5 +155,5 @@ class AsyncNotesWithRawResponse:
         self._client = client
 
     @cached_property
-    def notes(self) -> AsyncNotesWithRawResponse:
-        return AsyncNotesWithRawResponse(self._client.notes)
+    def notes(self) -> AsyncNotesResourceWithRawResponse:
+        return AsyncNotesResourceWithRawResponse(self._client.notes)

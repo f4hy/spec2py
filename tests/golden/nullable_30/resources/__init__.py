@@ -2,6 +2,16 @@
 # overwritten on regeneration. Extend the client in `_custom/` instead.
 """API resources, one module per resource."""
 
-from .notes import AsyncNotes, AsyncNotesWithRawResponse, Notes, NotesWithRawResponse
+from .notes import (
+    AsyncNotesResource,
+    AsyncNotesResourceWithRawResponse,
+    NotesResource,
+    NotesResourceWithRawResponse,
+)
 
-__all__ = ["AsyncNotes", "AsyncNotesWithRawResponse", "Notes", "NotesWithRawResponse"]
+__all__ = [
+    "AsyncNotesResource",
+    "AsyncNotesResourceWithRawResponse",
+    "NotesResource",
+    "NotesResourceWithRawResponse",
+]

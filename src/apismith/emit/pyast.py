@@ -50,6 +50,10 @@ class Imports:
         self._preassigned: dict[tuple[str, str], str] = {}
         self.shadowed: set[str] = set()
         """Builtins shadowed by a class attribute (a method named ``list``)."""
+        self.model_modules: dict[str, str] | None = None
+        """When models are split into a package: model name -> its module."""
+        self.deferred: set[tuple[str, str]] = set()
+        """Imports needed only by type checkers (emitted under ``TYPE_CHECKING``)."""
 
     def preassign(self, module: str, *names: str) -> None:
         """Claim local names for imports that may be used later (e.g. by unasync)."""
@@ -59,6 +63,11 @@ class Imports:
 
     def name(self, module: str | None, name: str) -> str:
         """Return the local name for ``module.name``, importing it if needed."""
+        if module == MODELS and self.model_modules is not None:
+            target = self.model_modules[name]
+            if self.here == f"models.{target}":
+                return name
+            module = f".{target}"
         if module is None or module == self.here:
             return name
         key = (module, name)
@@ -96,13 +105,27 @@ class Imports:
 
     def statements(self) -> list[ast.stmt]:
         grouped: dict[str, list[ast.alias]] = defaultdict(list)
+        deferred: dict[str, list[ast.alias]] = defaultdict(list)
         for (module, name), local in sorted(self._names.items()):
-            grouped[self._resolve(module)].append(
+            target = deferred if (module, name) in self.deferred else grouped
+            target[self._resolve(module)].append(
                 ast.alias(name=name, asname=None if local == name else local)
             )
+        if deferred:
+            grouped["typing"].append(ast.alias(name="TYPE_CHECKING"))
         out: list[ast.stmt] = [
             ast.Import(names=[ast.alias(name=m)]) for m in sorted(self._modules)
         ]
+        out.extend(self._from_imports(grouped))
+        if deferred:
+            out.append(
+                ast.If(ast.Name("TYPE_CHECKING"), self._from_imports(deferred), [])
+            )
+        return out
+
+    @staticmethod
+    def _from_imports(grouped: dict[str, list[ast.alias]]) -> list[ast.stmt]:
+        out: list[ast.stmt] = []
         for module, aliases in sorted(grouped.items()):
             level = len(module) - len(module.lstrip("."))
             out.append(

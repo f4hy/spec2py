@@ -36,8 +36,8 @@ from ._models import (
     Tolerant,
     build_body,
     jsonable,
+    link_models,
     parse_value,
-    rebuild_models,
     validate_param,
 )
 from ._pagination import (
@@ -145,9 +145,9 @@ __all__ = [
     "build_body",
     "is_given",
     "jsonable",
+    "link_models",
     "parse_value",
     "path_template",
-    "rebuild_models",
     "to_raw_response_wrapper",
     "validate_param",
 ]

@@ -183,7 +183,6 @@ def render_package(
 
     modules: dict[str, ast.Module] = {
         "__init__.py": _init_module(plan, custom),
-        "models.py": emit_models(plan)[0],
         "_client.py": emit_client(plan),
         "resources/__init__.py": _resources_init(plan),
         "_version.py": ast.Module(
@@ -195,6 +194,7 @@ def render_package(
             type_ignores=[],
         ),
     }
+    modules.update(emit_models(plan))
     for resource in plan.resources:
         modules[f"resources/{resource.attr}.py"] = emit_resource(
             plan, resource, aliases

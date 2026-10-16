@@ -8,6 +8,7 @@ round trip.
 
 import functools
 import logging
+import sys
 import types
 import typing
 from collections.abc import Mapping
@@ -24,8 +25,8 @@ __all__ = [
     "Tolerant",
     "build_body",
     "jsonable",
+    "link_models",
     "parse_value",
-    "rebuild_models",
     "validate_param",
 ]
 
@@ -39,7 +40,8 @@ class BaseModel(pydantic.BaseModel):
     Keeps fields the schema doesn't declare (``extra="allow"``), accepts both
     Python field names and wire aliases, and reads attribute docstrings as field
     descriptions. Use ``model_fields_set`` to tell an absent field from one that
-    was explicitly ``null``.
+    was explicitly ``null``. Validators are built lazily on first use, so
+    importing a client with thousands of models stays fast.
     """
 
     model_config = pydantic.ConfigDict(
@@ -50,6 +52,7 @@ class BaseModel(pydantic.BaseModel):
         use_attribute_docstrings=True,
         arbitrary_types_allowed=True,
         protected_namespaces=(),
+        defer_build=True,
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -131,6 +134,7 @@ def _best_effort(tp: Any, data: object) -> object:
         and isinstance(data, dict)
     ):
         raw = cast(dict[str, object], data)
+        _ensure_built(tp)
         values: dict[str, object] = {}
         consumed: set[str] = set()
         for name, field in tp.model_fields.items():
@@ -147,8 +151,15 @@ def _best_effort(tp: Any, data: object) -> object:
     return data
 
 
+def _ensure_built(model: type[pydantic.BaseModel]) -> None:
+    """Build a deferred model so its field annotations are resolved types."""
+    if not model.__pydantic_complete__:
+        model.model_rebuild()
+
+
 @functools.cache
 def _field_adapter(model: type[pydantic.BaseModel], name: str) -> TypeAdapter[Any]:
+    _ensure_built(model)
     field = model.model_fields[name]
     annotation: Any = field.annotation
     if field.metadata:
@@ -211,17 +222,20 @@ def jsonable(value: object) -> object:
             return pydantic_core.to_jsonable_python(value)
 
 
-def rebuild_models(namespace: Mapping[str, object]) -> None:
-    """Resolve forward references for every model defined in a generated module.
+def link_models(namespace: Mapping[str, object]) -> None:
+    """Make every model name resolvable from every module of a split models package.
 
-    Called once at the bottom of ``models.py`` with ``globals()``, after all
-    classes and type aliases exist, so recursive and out-of-order references work.
+    Large specs split ``models`` into a package whose modules reference each
+    other only under ``TYPE_CHECKING`` (so imports stay acyclic). Called at the
+    bottom of ``models/__init__.py`` with ``globals()``, this adds the package's
+    exports to each submodule's namespace. Nothing is built here: models build
+    their validators lazily, on first use, which keeps importing a client with
+    thousands of models fast.
     """
-    module = namespace.get("__name__")
-    for value in list(namespace.values()):
-        if (
-            isinstance(value, type)
-            and issubclass(value, pydantic.BaseModel)
-            and value.__module__ == module
-        ):
-            value.model_rebuild()
+    package = str(namespace.get("__name__"))
+    exported = cast(list[str], namespace.get("__all__", []))
+    names = {name: namespace[name] for name in exported if name in namespace}
+    for module_name, module in list(sys.modules.items()):
+        if module_name.startswith(package + "."):
+            for name, value in names.items():
+                module.__dict__.setdefault(name, value)

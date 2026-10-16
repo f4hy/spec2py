@@ -1,0 +1,1342 @@
+{
+ "description": "Billing, customers and AI completions for Acme Corp.",
+ "openapi_version": "3.1.0",
+ "operations": [
+  {
+   "description": "Returns invoices, newest first.",
+   "method": "get",
+   "operation_id": "listInvoices",
+   "parameters": [
+    {
+     "location": "query",
+     "name": "status",
+     "schema": {
+      "kind": "ref",
+      "ref": "InvoiceStatus"
+     }
+    },
+    {
+     "description": "Only invoices for these customers.",
+     "location": "query",
+     "name": "customer_ids",
+     "schema": {
+      "items": {
+       "kind": "string"
+      },
+      "kind": "array"
+     }
+    },
+    {
+     "location": "query",
+     "name": "cursor",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "location": "query",
+     "name": "limit",
+     "schema": {
+      "default": 20,
+      "has_default": true,
+      "kind": "integer"
+     }
+    }
+   ],
+   "path": "/invoices",
+   "responses": [
+    {
+     "description": "A page of invoices.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "object",
+      "properties": [
+       {
+        "name": "data",
+        "required": true,
+        "schema": {
+         "items": {
+          "kind": "ref",
+          "ref": "Invoice"
+         },
+         "kind": "array"
+        }
+       },
+       {
+        "name": "next_cursor",
+        "schema": {
+         "kind": "string",
+         "nullable": true
+        }
+       }
+      ]
+     },
+     "status": "200"
+    },
+    {
+     "description": "Error.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Error"
+     },
+     "status": "DEFAULT"
+    }
+   ],
+   "summary": "List invoices",
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "method": "post",
+   "operation_id": "createInvoice",
+   "parameters": [
+    {
+     "location": "header",
+     "name": "Idempotency-Key",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/invoices",
+   "request_body": {
+    "media_type": "application/json",
+    "media_types": [
+     "application/json"
+    ],
+    "required": true,
+    "schema": {
+     "kind": "ref",
+     "ref": "InvoiceCreate"
+    }
+   },
+   "responses": [
+    {
+     "description": "Created.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Invoice"
+     },
+     "status": "201"
+    },
+    {
+     "description": "Validation failed.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "ValidationError"
+     },
+     "status": "422"
+    },
+    {
+     "description": "Error.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Error"
+     },
+     "status": "DEFAULT"
+    }
+   ],
+   "summary": "Create an invoice",
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "getInvoice",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "invoice_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/invoices/{invoice_id}",
+   "responses": [
+    {
+     "description": "The invoice.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Invoice"
+     },
+     "status": "200"
+    },
+    {
+     "description": "Not found.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Error"
+     },
+     "status": "404"
+    }
+   ],
+   "summary": "Retrieve an invoice",
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "deprecated": true,
+   "description": "Use void instead.",
+   "method": "delete",
+   "operation_id": "deleteInvoice",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "invoice_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/invoices/{invoice_id}",
+   "responses": [
+    {
+     "description": "Deleted.",
+     "status": "204"
+    }
+   ],
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "method": "patch",
+   "operation_id": "updateInvoice",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "invoice_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/invoices/{invoice_id}",
+   "request_body": {
+    "media_type": "application/json",
+    "media_types": [
+     "application/json"
+    ],
+    "schema": {
+     "kind": "object",
+     "properties": [
+      {
+       "name": "memo",
+       "schema": {
+        "description": "Free-form note shown on the invoice. Send null to clear it.",
+        "kind": "string",
+        "nullable": true
+       }
+      },
+      {
+       "name": "metadata",
+       "schema": {
+        "kind": "ref",
+        "ref": "Metadata"
+       }
+      }
+     ]
+    }
+   },
+   "responses": [
+    {
+     "description": "The updated invoice.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Invoice"
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "method": "post",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "invoice_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/invoices/{invoice_id}/void",
+   "responses": [
+    {
+     "description": "The voided invoice.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Invoice"
+     },
+     "status": "200"
+    }
+   ],
+   "summary": "Void an invoice",
+   "tags": [
+    "invoices"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "listCustomers",
+   "parameters": [
+    {
+     "location": "query",
+     "name": "offset",
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "location": "query",
+     "name": "limit",
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "location": "query",
+     "name": "created_after",
+     "schema": {
+      "format": "date-time",
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/customers",
+   "responses": [
+    {
+     "description": "Customers.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "object",
+      "properties": [
+       {
+        "name": "items",
+        "schema": {
+         "items": {
+          "kind": "ref",
+          "ref": "Customer"
+         },
+         "kind": "array"
+        }
+       },
+       {
+        "name": "total",
+        "schema": {
+         "kind": "integer"
+        }
+       }
+      ]
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "customers"
+   ]
+  },
+  {
+   "method": "post",
+   "operation_id": "createCustomer",
+   "path": "/customers",
+   "request_body": {
+    "media_type": "application/json",
+    "media_types": [
+     "application/json"
+    ],
+    "required": true,
+    "schema": {
+     "kind": "ref",
+     "ref": "Customer"
+    }
+   },
+   "responses": [
+    {
+     "description": "Created.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Customer"
+     },
+     "status": "201"
+    }
+   ],
+   "tags": [
+    "customers"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "listCustomerPaymentMethods",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "customer_id",
+     "required": true,
+     "schema": {
+      "format": "uuid",
+      "kind": "string"
+     }
+    },
+    {
+     "location": "query",
+     "name": "page",
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "location": "query",
+     "name": "per_page",
+     "schema": {
+      "kind": "integer"
+     }
+    }
+   ],
+   "path": "/customers/{customer_id}/payment-methods",
+   "responses": [
+    {
+     "description": "Payment methods.",
+     "headers": {
+      "link": {
+       "kind": "string"
+      }
+     },
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "items": {
+       "kind": "ref",
+       "ref": "PaymentMethod"
+      },
+      "kind": "array"
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "customers"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "listCategories",
+   "parameters": [
+    {
+     "location": "query",
+     "name": "page",
+     "schema": {
+      "kind": "integer"
+     }
+    }
+   ],
+   "path": "/catalog/categories",
+   "responses": [
+    {
+     "description": "Category trees.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "object",
+      "properties": [
+       {
+        "name": "results",
+        "schema": {
+         "items": {
+          "kind": "ref",
+          "ref": "Category"
+         },
+         "kind": "array"
+        }
+       },
+       {
+        "name": "total_pages",
+        "schema": {
+         "kind": "integer"
+        }
+       }
+      ]
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "catalog"
+   ]
+  },
+  {
+   "method": "post",
+   "operation_id": "searchCatalog",
+   "path": "/catalog/search",
+   "request_body": {
+    "media_type": "application/json",
+    "media_types": [
+     "application/json"
+    ],
+    "schema": {
+     "items": {
+      "kind": "ref",
+      "ref": "SearchFilter"
+     },
+     "kind": "array"
+    }
+   },
+   "responses": [
+    {
+     "description": "Matches.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "items": {
+       "kind": "union",
+       "union_kind": "oneOf",
+       "variants": [
+        {
+         "kind": "ref",
+         "ref": "Product"
+        },
+        {
+         "kind": "ref",
+         "ref": "Category"
+        }
+       ]
+      },
+      "kind": "array"
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "catalog"
+   ]
+  },
+  {
+   "method": "post",
+   "operation_id": "createCompletion",
+   "path": "/completions",
+   "request_body": {
+    "media_type": "application/json",
+    "media_types": [
+     "application/json"
+    ],
+    "required": true,
+    "schema": {
+     "kind": "object",
+     "properties": [
+      {
+       "name": "prompt",
+       "required": true,
+       "schema": {
+        "kind": "string"
+       }
+      },
+      {
+       "name": "max_tokens",
+       "schema": {
+        "kind": "integer"
+       }
+      },
+      {
+       "name": "temperature",
+       "schema": {
+        "kind": "number"
+       }
+      }
+     ]
+    }
+   },
+   "responses": [
+    {
+     "description": "Server-sent completion events.",
+     "item_schema": {
+      "kind": "ref",
+      "ref": "CompletionEvent"
+     },
+     "media_type": "text/event-stream",
+     "media_types": [
+      "text/event-stream"
+     ],
+     "status": "200"
+    }
+   ],
+   "summary": "Stream a completion",
+   "tags": [
+    "completions"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "exportEvents",
+   "path": "/events/export",
+   "responses": [
+    {
+     "description": "Newline-delimited events.",
+     "media_type": "application/x-ndjson",
+     "media_types": [
+      "application/x-ndjson"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "Event"
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "events"
+   ]
+  },
+  {
+   "method": "post",
+   "operation_id": "uploadFile",
+   "path": "/files",
+   "request_body": {
+    "media_type": "multipart/form-data",
+    "media_types": [
+     "multipart/form-data"
+    ],
+    "required": true,
+    "schema": {
+     "kind": "object",
+     "properties": [
+      {
+       "name": "file",
+       "required": true,
+       "schema": {
+        "format": "binary",
+        "kind": "string"
+       }
+      },
+      {
+       "name": "purpose",
+       "required": true,
+       "schema": {
+        "format": "string",
+        "kind": "enum",
+        "values": [
+         "invoice_attachment",
+         "logo"
+        ]
+       }
+      },
+      {
+       "name": "tags",
+       "schema": {
+        "items": {
+         "kind": "string"
+        },
+        "kind": "array"
+       }
+      }
+     ]
+    }
+   },
+   "responses": [
+    {
+     "description": "Uploaded.",
+     "media_type": "application/json",
+     "media_types": [
+      "application/json"
+     ],
+     "schema": {
+      "kind": "ref",
+      "ref": "FileObject"
+     },
+     "status": "201"
+    }
+   ],
+   "tags": [
+    "files"
+   ]
+  },
+  {
+   "method": "get",
+   "operation_id": "downloadFile",
+   "parameters": [
+    {
+     "location": "path",
+     "name": "file_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ],
+   "path": "/files/{file_id}/content",
+   "responses": [
+    {
+     "description": "The file bytes.",
+     "media_type": "application/octet-stream",
+     "media_types": [
+      "application/octet-stream"
+     ],
+     "schema": {
+      "format": "binary",
+      "kind": "string"
+     },
+     "status": "200"
+    }
+   ],
+   "tags": [
+    "files"
+   ]
+  }
+ ],
+ "schemas": {
+  "Address": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "line1",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "city",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "country",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "BankAccount": {
+   "bases": [
+    "PaymentMethodBase"
+   ],
+   "kind": "object",
+   "properties": [
+    {
+     "name": "bank_name",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "routing_number",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Card": {
+   "bases": [
+    "PaymentMethodBase"
+   ],
+   "kind": "object",
+   "properties": [
+    {
+     "name": "last4",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "brand",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Category": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "name": "name",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "children",
+     "schema": {
+      "items": {
+       "kind": "ref",
+       "ref": "Category"
+      },
+      "kind": "array"
+     }
+    }
+   ]
+  },
+  "CompletionEvent": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "type",
+     "required": true,
+     "schema": {
+      "format": "string",
+      "kind": "enum",
+      "values": [
+       "delta",
+       "done"
+      ]
+     }
+    },
+    {
+     "name": "text",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Customer": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "format": "uuid",
+      "kind": "string",
+      "read_only": true
+     }
+    },
+    {
+     "name": "email",
+     "required": true,
+     "schema": {
+      "format": "email",
+      "kind": "string"
+     }
+    },
+    {
+     "name": "name",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "class",
+     "schema": {
+      "description": "Customer tier (a Python keyword).",
+      "kind": "string"
+     }
+    },
+    {
+     "name": "address",
+     "schema": {
+      "kind": "ref",
+      "ref": "Address"
+     }
+    }
+   ]
+  },
+  "Error": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "message",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "code",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Event": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "kind",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "payload",
+     "schema": {
+      "additional": {
+       "kind": "any"
+      },
+      "kind": "map"
+     }
+    }
+   ]
+  },
+  "FileObject": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "bytes",
+     "required": true,
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "name": "filename",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "purpose",
+     "schema": {
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Invoice": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "kind": "string",
+      "read_only": true
+     }
+    },
+    {
+     "name": "status",
+     "required": true,
+     "schema": {
+      "kind": "ref",
+      "ref": "InvoiceStatus"
+     }
+    },
+    {
+     "name": "total",
+     "required": true,
+     "schema": {
+      "kind": "ref",
+      "ref": "Money"
+     }
+    },
+    {
+     "name": "customerId",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "memo",
+     "schema": {
+      "kind": "string",
+      "nullable": true
+     }
+    },
+    {
+     "name": "created_at",
+     "required": true,
+     "schema": {
+      "format": "date-time",
+      "kind": "string"
+     }
+    },
+    {
+     "name": "metadata",
+     "schema": {
+      "kind": "ref",
+      "ref": "Metadata"
+     }
+    },
+    {
+     "name": "collection_method",
+     "schema": {
+      "format": "string",
+      "kind": "enum",
+      "values": [
+       "charge_automatically",
+       "send_invoice"
+      ]
+     }
+    }
+   ]
+  },
+  "InvoiceCreate": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "customer_id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "amount",
+     "required": true,
+     "schema": {
+      "kind": "integer"
+     }
+    },
+    {
+     "name": "currency",
+     "schema": {
+      "default": "usd",
+      "has_default": true,
+      "kind": "string"
+     }
+    },
+    {
+     "name": "due_date",
+     "schema": {
+      "format": "date",
+      "kind": "string"
+     }
+    },
+    {
+     "name": "memo",
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "metadata",
+     "schema": {
+      "kind": "ref",
+      "ref": "Metadata"
+     }
+    },
+    {
+     "name": "line_items",
+     "schema": {
+      "items": {
+       "kind": "object",
+       "properties": [
+        {
+         "name": "description",
+         "required": true,
+         "schema": {
+          "kind": "string"
+         }
+        },
+        {
+         "name": "amount",
+         "required": true,
+         "schema": {
+          "kind": "integer"
+         }
+        },
+        {
+         "name": "quantity",
+         "schema": {
+          "default": 1,
+          "has_default": true,
+          "kind": "integer"
+         }
+        }
+       ]
+      },
+      "kind": "array"
+     }
+    }
+   ]
+  },
+  "InvoiceStatus": {
+   "format": "string",
+   "kind": "enum",
+   "values": [
+    "draft",
+    "open",
+    "paid",
+    "void"
+   ]
+  },
+  "Metadata": {
+   "additional": {
+    "kind": "string"
+   },
+   "kind": "map"
+  },
+  "Money": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "amount",
+     "required": true,
+     "schema": {
+      "description": "Amount in the smallest currency unit.",
+      "kind": "integer"
+     }
+    },
+    {
+     "name": "currency",
+     "required": true,
+     "schema": {
+      "examples": [
+       "usd"
+      ],
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "PaymentMethod": {
+   "discriminator": {
+    "mapping": {
+     "bank_account": "BankAccount",
+     "card": "Card"
+    },
+    "property": "type"
+   },
+   "kind": "union",
+   "union_kind": "oneOf",
+   "variants": [
+    {
+     "kind": "ref",
+     "ref": "Card"
+    },
+    {
+     "kind": "ref",
+     "ref": "BankAccount"
+    }
+   ]
+  },
+  "PaymentMethodBase": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "created_at",
+     "schema": {
+      "format": "date-time",
+      "kind": "string"
+     }
+    }
+   ]
+  },
+  "Product": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "sku",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "price",
+     "required": true,
+     "schema": {
+      "kind": "ref",
+      "ref": "Money"
+     }
+    },
+    {
+     "name": "attributes",
+     "schema": {
+      "kind": "any",
+      "lossy": [
+       "untyped schema"
+      ]
+     }
+    }
+   ]
+  },
+  "SearchFilter": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "field",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "op",
+     "schema": {
+      "format": "string",
+      "kind": "enum",
+      "values": [
+       "eq",
+       "lt",
+       "gt"
+      ]
+     }
+    },
+    {
+     "name": "value",
+     "required": true,
+     "schema": {
+      "kind": "union",
+      "union_kind": "anyOf",
+      "variants": [
+       {
+        "kind": "string"
+       },
+       {
+        "kind": "number"
+       },
+       {
+        "kind": "boolean"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "ValidationError": {
+   "kind": "object",
+   "properties": [
+    {
+     "name": "message",
+     "required": true,
+     "schema": {
+      "kind": "string"
+     }
+    },
+    {
+     "name": "errors",
+     "required": true,
+     "schema": {
+      "items": {
+       "kind": "object",
+       "properties": [
+        {
+         "name": "field",
+         "schema": {
+          "kind": "string"
+         }
+        },
+        {
+         "name": "problem",
+         "schema": {
+          "kind": "string"
+         }
+        }
+       ]
+      },
+      "kind": "array"
+     }
+    }
+   ]
+  }
+ },
+ "security": [
+  {
+   "bearerAuth": []
+  }
+ ],
+ "security_schemes": {
+  "bearerAuth": {
+   "name": "bearerAuth",
+   "scheme": "bearer",
+   "type": "http"
+  }
+ },
+ "servers": [
+  {
+   "url": "https://api.acme.test/v1"
+  }
+ ],
+ "title": "Acme API",
+ "version": "2.4.0"
+}

@@ -1,0 +1,27 @@
+openapi: 3.1.0
+info: {title: Shelf, version: "1"}
+paths:
+  /books:
+    get:
+      operationId: listBooks
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "./common.yaml#/components/schemas/Book"}
+  /authors/{id}:
+    get:
+      operationId: getAuthor
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: "./author.yaml"}

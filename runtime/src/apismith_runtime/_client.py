@@ -102,7 +102,7 @@ class RequestSpec:
     body: object = NOT_GIVEN
     form: Mapping[str, object] | None = None
     files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven] | None = None
-    content: bytes | None = None
+    content: bytes | NotGiven | None = None
     content_type: str | None = None
     security: bool = True
     errors: ErrorMap | None = None
@@ -123,7 +123,7 @@ class RequestOptions(TypedDict, total=False):
     body: object
     form: Mapping[str, object] | None
     files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven] | None
-    content: bytes | None
+    content: bytes | NotGiven | None
     content_type: str | None
     security: bool
     errors: ErrorMap | None
@@ -283,7 +283,7 @@ class _BaseClient:
                 kwargs["data"] = to_multipart_data(form)
             else:
                 kwargs["data"] = to_multipart_data(form)
-        elif spec.content is not None:
+        elif spec.content is not None and not isinstance(spec.content, NotGiven):
             kwargs["content"] = spec.content
             headers.setdefault(
                 "Content-Type", spec.content_type or "application/octet-stream"

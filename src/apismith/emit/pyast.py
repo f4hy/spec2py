@@ -116,6 +116,10 @@ class Imports:
 class TypeExpr:
     """A Python type annotation."""
 
+    def static(self) -> TypeExpr:
+        """This type without ``Annotated`` metadata (which only pydantic reads)."""
+        return self
+
     def to_ast(self, imports: Imports) -> ast.expr:
         raise NotImplementedError
 
@@ -160,6 +164,9 @@ class TSub(TypeExpr):
     base: TypeExpr
     args: tuple[TypeExpr, ...]
 
+    def static(self) -> TypeExpr:
+        return TSub(self.base, tuple(a.static() for a in self.args))
+
     def to_ast(self, imports: Imports) -> ast.expr:
         args = [a.to_ast(imports) for a in self.args]
         slice_: ast.expr = args[0] if len(args) == 1 else ast.Tuple(args)
@@ -176,10 +183,23 @@ class TUnion(TypeExpr):
     @staticmethod
     def of(*members: TypeExpr) -> TypeExpr:
         flat: list[TypeExpr] = []
+        literal_values: list[Any] = []
         for m in members:
             for inner in m.members if isinstance(m, TUnion) else (m,):
-                if inner not in flat:
+                if isinstance(inner, TLiteral):
+                    # One Literal[...] reads better than a union of them.
+                    if not literal_values:
+                        flat.append(inner)
+                    literal_values.extend(
+                        v for v in inner.values if v not in literal_values
+                    )
+                elif inner not in flat:
                     flat.append(inner)
+        if literal_values:
+            flat = [
+                TLiteral(tuple(literal_values)) if isinstance(m, TLiteral) else m
+                for m in flat
+            ]
         # None and NotGiven go last, as people write them.
         flat.sort(
             key=lambda t: (
@@ -187,6 +207,9 @@ class TUnion(TypeExpr):
             )
         )
         return flat[0] if len(flat) == 1 else TUnion(tuple(flat))
+
+    def static(self) -> TypeExpr:
+        return TUnion.of(*(m.static() for m in self.members))
 
     def to_ast(self, imports: Imports) -> ast.expr:
         nodes = [m.to_ast(imports) for m in self.members]
@@ -241,6 +264,9 @@ class TAnnotated(TypeExpr):
         return ast.Subscript(
             ast.Name(imports.name("typing", "Annotated")), ast.Tuple(elts)
         )
+
+    def static(self) -> TypeExpr:
+        return self.inner.static()
 
     def render(self) -> str:
         meta = ", ".join(m.render() for m in self.metadata)

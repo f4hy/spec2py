@@ -174,7 +174,7 @@ class _Builder:
         t = node.get("type")
         if t not in (None, "object") and not (isinstance(t, list) and "object" in t):
             return False
-        return "properties" in node or "allOf" in node
+        return bool(node.get("properties")) or "allOf" in node
 
     # -- schemas -----------------------------------------------------------------
 

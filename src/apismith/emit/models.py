@@ -1,12 +1,15 @@
 """Emit ``models.py``: Pydantic models and type aliases."""
 
 import ast
+import builtins
 from typing import Any
 
 from ..plan import MISSING, RUNTIME, PAlias, PField, Plan, PModel
 from .pyast import MODELS, Imports, TName, call, const, doc_expr, docstring
 
 __all__ = ["emit_models"]
+
+_BUILTINS = frozenset(dir(builtins))
 
 
 def _field_value(f: PField, imports: Imports) -> ast.expr | None:
@@ -24,8 +27,23 @@ def _field_value(f: PField, imports: Imports) -> ast.expr | None:
 
 
 def _model(model: PModel, imports: Imports) -> ast.ClassDef:
+    # Under PEP 649 a field named like a builtin (``object``, ``type``) shadows it
+    # in every annotation of the class, so those annotations say ``builtins.x``.
+    imports.shadowed = {f.py_name for f in model.fields} & _BUILTINS
+    try:
+        return _model_body(model, imports)
+    finally:
+        imports.shadowed = set()
+
+
+def _model_body(model: PModel, imports: Imports) -> ast.ClassDef:
     body: list[ast.stmt] = []
-    if text := docstring(model.doc, "Deprecated." if model.deprecated else None):
+    extra = None
+    if model.extra is not None:
+        # A typed ``__pydantic_extra__`` would be an incompatible override for
+        # pyright and ty, so the value type is documented instead.
+        extra = f"Additional properties are kept in ``model_extra`` (values: ``{model.extra.render()}``)."
+    if text := docstring(model.doc, "Deprecated." if model.deprecated else None, extra):
         body.append(doc_expr(text))
     for f in model.fields:
         body.append(
@@ -38,20 +56,6 @@ def _model(model: PModel, imports: Imports) -> ast.ClassDef:
         )
         if text := docstring(f.doc):
             body.append(doc_expr(text))
-    if model.extra is not None:
-        body.append(
-            ast.AnnAssign(
-                target=ast.Name("__pydantic_extra__"),
-                annotation=ast.Subscript(
-                    ast.Name("dict"),
-                    ast.Tuple([ast.Name("str"), model.extra.to_ast(imports)]),
-                ),
-                value=call(
-                    ast.Name(imports.name("pydantic", "Field")), init=const(False)
-                ),
-                simple=1,
-            )
-        )
     if not body:
         body.append(ast.Pass())
     bases = [TName(b, MODELS).to_ast(imports) for b in model.bases] or [

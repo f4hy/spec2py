@@ -375,6 +375,20 @@ class Plan:
 # -- planner ---------------------------------------------------------------------
 
 
+_TITLE_NOISE: Final = frozenset(
+    {"api", "apis", "client", "sdk", "rest", "openapi", "spec"}
+)
+
+
+def _is_title_noise(word: str) -> bool:
+    """Trailing title words that don't belong in a class name ("API", "v2", "3")."""
+    return (
+        word in _TITLE_NOISE
+        or word.isdigit()
+        or re.fullmatch(r"v\d+", word) is not None
+    )
+
+
 def _literal_ok(values: Iterable[Any]) -> bool:
     return all(isinstance(v, str | int | bool) for v in values)
 
@@ -670,62 +684,73 @@ class _Planner:
             deprecated=s.deprecated,
         )
         self.decls[name] = model
+        tags = self.disc_values.get(component or "", {})
         bases = [self.model_base(b) for b in s.bases]
-        inherited: list[Property] = []
-        tags = set(self.disc_values.get(component or "", {}))
-        if bases and tags & {
-            p.name for b in bases for p in self.all_properties(self.api.schemas[b])
-        }:
-            # Narrowing an inherited field to a Literal tag is an unsound override
-            # of a mutable attribute, so discriminated variants copy their base's
-            # fields instead of inheriting.
-            inherited = [
-                p for b in bases for p in self.all_properties(self.api.schemas[b])
-            ]
-            bases = []
-        if bases:
-            model.bases = [self.component_names[bases[0]]]
-            # Extra bases are flattened: pydantic models compose poorly with
-            # multiple inheritance, and the merged model reads the same.
-            for extra in bases[1:]:
-                inherited.extend(self.all_properties(self.api.schemas[extra]))
-            if len(bases) > 1:
-                self.note(
-                    f"`{name}`: allOf with {len(bases)} bases; inherits `{model.bases[0]}` and copies the fields of the rest."
-                )
-        base_fields = (
-            {p.name for p in self.all_properties(self.api.schemas[bases[0]])}
-            if bases
-            else set()
-        )
+        # Only object components can be base classes; others contribute fields.
+        copied = [
+            p
+            for b in bases
+            if self.api.schemas[b].kind is not Kind.OBJECT
+            for p in self.all_properties(self.api.schemas[b])
+        ]
+        bases = [b for b in bases if self.api.schemas[b].kind is Kind.OBJECT]
+        parent = bases[0] if bases else None
+        # Extra bases are flattened: pydantic models compose poorly with multiple
+        # inheritance, and the merged model reads the same.
+        for extra in bases[1:]:
+            copied.extend(self.all_properties(self.api.schemas[extra]))
+        if len(bases) > 1:
+            self.note(
+                f"`{name}`: allOf with {len(bases)} bases; inherits "
+                f"`{self.component_names[bases[0]]}` and copies the fields of the rest."
+            )
+        own = {p.name: p for p in [*copied, *s.properties]}
+        inherited: dict[str, PField] = {}
+        if parent is not None:
+            self.ensure_declared(parent)
+            inherited = {
+                f.wire_name: f for f in self.model_fields(self.component_names[parent])
+            }
+            # Untyped re-declarations (often only adding a description or
+            # marking a field required) keep the inherited field as it is.
+            own = {
+                k: p
+                for k, p in own.items()
+                if not (k in inherited and p.schema.kind is Kind.ANY)
+            }
         registry = NameRegistry(_FIELD_RESERVED)
-        if bases:
-            registry.reserve(*(self.field_name(p) for p in base_fields))
-        own = {p.name: p for p in [*inherited, *s.properties]}
+        registry.reserve(*(f.py_name for f in inherited.values()))
+        # Narrowing an inherited field (a Literal discriminator tag, or any other
+        # type change) is an unsound override of a mutable attribute; when that
+        # would happen the model copies its base's fields instead of inheriting.
+        flatten = bool(set(tags) & set(inherited))
+        fields: list[PField] = []
         for prop in own.values():
-            if prop.name in base_fields:
-                # Overriding an inherited field keeps the inherited python name.
+            if prop.name in inherited:
                 f = self.plan_field(name, prop, NameRegistry(_FIELD_RESERVED))
+                f.py_name = inherited[prop.name].py_name
+                flatten = flatten or f.type != inherited[prop.name].type
             else:
                 f = self.plan_field(name, prop, registry)
-            model.fields.append(f)
-        for prop_name, values in (self.disc_values.get(component or "", {})).items():
+            fields.append(f)
+        if flatten:
+            overridden = {f.wire_name for f in fields}
+            fields = [f for w, f in inherited.items() if w not in overridden] + fields
+            parent = None
+        model.bases = [self.component_names[parent]] if parent is not None else []
+        model.fields = fields
+        for prop_name, values in tags.items():
             wire_props = {p.name: p for p in self.all_properties(s)}
-            py = self.field_name(prop_name)
-            literal = TLiteral(tuple(values))
             existing = next((f for f in model.fields if f.wire_name == prop_name), None)
-            doc = (
-                wire_props[prop_name].schema.description
-                if prop_name in wire_props
-                else None
-            )
             tagged = PField(
-                py,
+                existing.py_name if existing else self.field_name(prop_name),
                 prop_name,
-                literal,
+                TLiteral(tuple(values)),
                 required=len(values) > 1,
                 default=values[0] if len(values) == 1 else MISSING,
-                doc=doc,
+                doc=wire_props[prop_name].schema.description
+                if prop_name in wire_props
+                else None,
             )
             if existing is not None:
                 model.fields[model.fields.index(existing)] = tagged
@@ -735,8 +760,11 @@ class _Planner:
             self.note(f"`{name}`: {lossy}.")
         if s.additional is not None:
             model.extra = self.type_of(s.additional, name + "Extra", "field")
-        # Required fields first is not needed (pydantic allows any order); keep spec order.
         return model
+
+    def ensure_declared(self, component: str) -> None:
+        if self.component_names[component] not in self.decls:
+            self.declare_component(component, self.api.schemas[component])
 
     def declare_component(self, component: str, s: Schema) -> None:
         name = self.component_names[component]
@@ -1024,7 +1052,7 @@ class _Planner:
                     "content",
                     "content",
                     ptype,
-                    body.required,
+                    True,
                     body.description,
                 )
             )
@@ -1085,8 +1113,9 @@ class _Planner:
             method.params.append(param)
 
     def model_fields(self, name: str) -> list[PField]:
-        decl = self.decls[name]
-        assert isinstance(decl, PModel)
+        decl = self.decls.get(name)
+        if not isinstance(decl, PModel):
+            return []
         fields: dict[str, PField] = {}
         for base in decl.bases:
             for f in self.model_fields(base):
@@ -1423,27 +1452,22 @@ class _Planner:
 
     def plan_client(self) -> PClient:
         cfg = self.config
+        title = re.split(r"\s+[-\u2013\u2014:|]\s+", self.api.title)[0]
+        # Split on spaces, not case, so "GitHub" stays one word ("github").
+        words = [w for w in re.split(r"[^A-Za-z0-9]+", title) if w]
+        while len(words) > 1 and _is_title_noise(words[-1].lower()):
+            words.pop()
         if cfg.client_name:
             class_name = safe_identifier(cfg.client_name)
+            words = [class_name]
         else:
-            words = camel_words(self.api.title)
-            while len(words) > 1 and words[-1] in (
-                "api",
-                "apis",
-                "service",
-                "client",
-                "sdk",
-                "rest",
-                "openapi",
-                "spec",
-                "server",
-            ):
-                words.pop()
             class_name = safe_identifier(
-                "".join(w.capitalize() for w in words) or "Client"
+                "".join(w[0].upper() + w[1:] for w in words) or "Client"
             )
-        package = cfg.package or safe_identifier(snake(class_name) or "client")
-        env_prefix = cfg.env_prefix or snake(class_name).upper()
+        package = cfg.package or safe_identifier(
+            "_".join(w.lower() for w in words) or "client"
+        )
+        env_prefix = cfg.env_prefix or package.upper()
         base_url = cfg.base_url
         if base_url is None and self.api.servers:
             url = self.api.servers[0].url
@@ -1561,8 +1585,8 @@ class _Planner:
     def plan(self) -> Plan:
         self.name_components()
         self.collect_discriminators()
-        for component, schema in self.api.schemas.items():
-            self.declare_component(component, schema)
+        for component in self.api.schemas:
+            self.ensure_declared(component)
         client = self.plan_client()
         resources = self.plan_resources()
         return Plan(

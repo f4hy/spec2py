@@ -8,7 +8,6 @@ from ..plan import RUNTIME, Plan, PMethod, PParam, PResource
 from .pyast import (
     MODELS,
     Imports,
-    TAnnotated,
     TName,
     TNone,
     TSub,
@@ -70,7 +69,7 @@ class _ResourceEmitter:
         method_names = {m.name for m in resource.methods}
         self.imports.shadowed = method_names & _BUILTIN_NAMES
         self.imports.preassign(RUNTIME, *_RUNTIME_NAMES, *RUNTIME_RENAMES.values())
-        self.imports.preassign("typing", "Any", "cast")
+        self.imports.preassign("typing", "cast")
         self.imports.preassign("types", "NoneType")
         self.imports.preassign("warnings", "deprecated")
 
@@ -86,40 +85,33 @@ class _ResourceEmitter:
         """An expression usable as ``cast_to``/``item_type`` (``type[T]``)."""
         if isinstance(t, TNone):
             return ast.Name(self.imports.name("types", "NoneType"))
+        # A model class or a ``list[...]``/``dict[...]`` already is a ``type[T]``;
+        # unions, literals and type aliases are not.
         is_class = (
             isinstance(t, TName) and not (t.module == MODELS and t.name in self.aliases)
         ) or (
             isinstance(t, TSub)
             and isinstance(t.base, TName)
             and t.base.name in ("list", "dict")
-            and not any(self._needs_cast(a) for a in t.args)
         )
         if is_class:
             return self.ann(t)
-        return call(
-            ast.Name(self.imports.name("typing", "cast")),
-            ast.Name(self.imports.name("typing", "Any")),
-            self.ann(t),
-        )
-
-    def _needs_cast(self, t: TypeExpr) -> bool:
-        if isinstance(t, TName):
-            return t.module == MODELS and t.name in self.aliases
-        if isinstance(t, TSub):
-            return any(self._needs_cast(a) for a in t.args)
-        return isinstance(t, TUnion | TAnnotated)
+        # ``cast(type[X | Y], X | Y)`` keeps the precise result type, where
+        # passing the union bare isn't a ``type[T]`` to checkers.
+        type_of = TSub(TName("type"), (t.static(),)).to_ast(self.imports)
+        return call(ast.Name(self.imports.name("typing", "cast")), type_of, self.ann(t))
 
     # -- signature -------------------------------------------------------------
 
     def param_annotation(self, p: PParam) -> tuple[ast.expr, ast.expr | None]:
-        t = p.type
+        t = p.type.static()
         if p.required:
             return self.ann(t), None
         return self.ann(TUnion.of(t, _NOT_GIVEN)), self.rt("NOT_GIVEN")
 
     def arguments(self, method: PMethod) -> ast.arguments:
         posonly = [
-            arg(p.py_name, self.ann(p.type))
+            arg(p.py_name, self.ann(p.type.static()))
             for p in method.params
             if p.location == "path"
         ]
@@ -349,7 +341,7 @@ class _ResourceEmitter:
             "args": self.arguments(method),
             "body": body,
             "decorator_list": decorators,
-            "returns": self.ann(returns),
+            "returns": self.ann(returns.static()),
             "type_params": [],
         }
         return ast.AsyncFunctionDef(**fields) if is_async else ast.FunctionDef(**fields)

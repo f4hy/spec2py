@@ -10,8 +10,10 @@ An overlay is a list of actions, each targeting nodes by JSONPath::
       - target: $.paths['/internal']
         remove: true
 
-``update`` deep-merges into objects and appends to arrays; ``remove`` deletes
-the targets; ``copy`` (1.1) copies the value at another path into the target.
+``update`` deep-merges into a targeted object (nested objects merge, other
+values, including nested arrays, are replaced) and appends to a targeted
+array; ``remove`` deletes the targets; ``copy`` (1.1) copies the value at
+another path into the target.
 """
 
 import copy

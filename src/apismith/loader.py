@@ -95,7 +95,7 @@ def load_fastapi_app(reference: str) -> JSON:
         sys.path.insert(0, cwd)
     try:
         module = importlib.import_module(module_name)
-    except ImportError as exc:
+    except Exception as exc:  # an app's import can fail in arbitrary ways
         raise LoadError(f"could not import {module_name!r}: {exc}") from exc
     obj: Any = module
     for part in attr.split("."):

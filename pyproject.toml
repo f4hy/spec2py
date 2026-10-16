@@ -41,6 +41,7 @@ dev = [
     "pyright>=1.1.410",
     "pytest>=9.1",
     "pytest-asyncio>=1.4",
+    "python-multipart>=0.0.20",
     "ruff>=0.17",
     "ty>=0.0.80",
     "types-pyyaml>=6.0",

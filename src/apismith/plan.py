@@ -677,9 +677,10 @@ class _Planner:
     def declare_object(
         self, name: str, s: Schema, *, source: str, component: str | None = None
     ) -> PModel:
+        title = s.title if s.title and pascal(s.title) != name else None
         model = PModel(
             name=name,
-            doc=s.description or s.title,
+            doc=s.description or title,
             source=source,
             deprecated=s.deprecated,
         )

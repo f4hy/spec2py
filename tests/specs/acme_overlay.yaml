@@ -1,0 +1,10 @@
+overlay: 1.0.0
+info: {title: Acme fixes, version: 1.0.0}
+actions:
+  - target: $.paths['/invoices/{invoice_id}/void'].post
+    update: {operationId: voidInvoice}
+  - target: $.paths['/events/export']
+    remove: true
+  - target: $.components.schemas.Customer.properties
+    update:
+      vip: {type: boolean, description: Added by the overlay.}

@@ -1,0 +1,13 @@
+components:
+  parameters:
+    Limit: {name: limit, in: query, schema: {type: integer}}
+  schemas:
+    Book:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
+        author: {$ref: "./author.yaml"}
+        related:
+          type: array
+          items: {$ref: "#/components/schemas/Book"}

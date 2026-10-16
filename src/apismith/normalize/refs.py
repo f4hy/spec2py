@@ -84,13 +84,16 @@ class _Bundler:
             self.cache[uri] = self.loader(uri)
         return self.cache[uri]
 
-    def name_for(self, uri: str, pointer: str) -> str:
-        base = (
-            pointer.rstrip("/").rsplit("/", 1)[-1]
-            if pointer
-            else pathlib.PurePosixPath(urllib.parse.urlparse(uri).path).stem
-        )
-        base = unescape_pointer(base) or "Schema"
+    def name_for(self, uri: str, pointer: str, target: JSON) -> str:
+        """A component name: the pointer's last segment, else the schema's title,
+        else the file name."""
+        if pointer.strip("/"):
+            base = unescape_pointer(pointer.rstrip("/").rsplit("/", 1)[-1])
+        elif isinstance(target, dict) and isinstance(target.get("title"), str):
+            base = str(target["title"])
+        else:
+            base = pathlib.PurePosixPath(urllib.parse.urlparse(uri).path).stem
+        base = base or "Schema"
         name, n = base, 2
         while name in self.schemas:
             name, n = f"{base}{n}", n + 1
@@ -152,7 +155,7 @@ class _Bundler:
             )
         )
         if is_schema:
-            name = self.name_for(uri, pointer)
+            name = self.name_for(uri, pointer, target)
             self.hoisted[key] = name
             self.schemas[name] = {}  # placeholder so recursive refs see the name
             self.schemas[name] = self.walk(copy.deepcopy(target), uri, external=True)

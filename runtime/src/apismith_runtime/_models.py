@@ -192,16 +192,34 @@ def build_body(
     for name, value in fields.items():
         if isinstance(value, NotGiven):
             continue
-        field = model.model_fields[name]
-        adapter = _field_adapter(model, name)
-        validated = adapter.validate_python(value, strict=True, context=_STRICT_CONTEXT)
-        key = field.alias or name
+        adapter = _field_adapter(model, name)  # builds a deferred model first
+        try:
+            validated = adapter.validate_python(
+                value, strict=True, context=_STRICT_CONTEXT
+            )
+        except ValidationError as exc:
+            raise _located(exc, model.__name__, name) from None
+        key = model.model_fields[name].alias or name
         body[key] = adapter.dump_python(
             validated, mode="json", by_alias=True, exclude_unset=True
         )
     if extra_body:
         body.update(extra_body)
     return body
+
+
+def _located(exc: ValidationError, title: str, name: str) -> ValidationError:
+    """A field's validation error, re-located at its argument name."""
+    errors: list[Any] = [
+        {
+            "type": e["type"],
+            "loc": (name, *e["loc"]),
+            "input": e["input"],
+            **({"ctx": e["ctx"]} if "ctx" in e else {}),
+        }
+        for e in exc.errors(include_url=False)
+    ]
+    return ValidationError.from_exception_data(title, errors)
 
 
 def jsonable(value: object) -> object:

@@ -101,7 +101,7 @@ class RequestSpec:
     cookies: Mapping[str, object] | None = None
     body: object = NOT_GIVEN
     form: Mapping[str, object] | None = None
-    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven] | None = None
+    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven | None] | None = None
     content: bytes | NotGiven | None = None
     content_type: str | None = None
     security: bool = True
@@ -122,7 +122,7 @@ class RequestOptions(TypedDict, total=False):
     cookies: Mapping[str, object] | None
     body: object
     form: Mapping[str, object] | None
-    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven] | None
+    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven | None] | None
     content: bytes | NotGiven | None
     content_type: str | None
     security: bool

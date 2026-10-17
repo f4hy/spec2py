@@ -157,6 +157,9 @@ def test_files_from_bytes_paths_file_objects_and_tuples(tmp_path: pathlib.Path) 
     assert files[2][1][0] == "data.bin"
     assert files[3] == ("named", ("custom.txt", b"t", "text/plain"))
     assert [f[0] for f in files[4:]] == ["many", "many"]
+    assert to_httpx_files({"absent": None, "given": b"x"}) == [
+        ("given", ("upload", b"x", None))
+    ]
 
 
 def test_multipart_form_fields() -> None:

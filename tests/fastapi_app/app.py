@@ -123,6 +123,18 @@ async def attach_file(
     )
 
 
+# No operation_id: FastAPI's default id is ``upload_todo_image_todos__todo_id__image_put``.
+@app.put("/todos/{todo_id}/image", tags=["todos"])
+async def upload_todo_image(
+    todo_id: int,
+    _: Annotated[str, Depends(authed)],
+    image: Annotated[UploadFile | None, File()] = None,
+) -> Attachment:
+    content = await image.read() if image else b""
+    filename = (image.filename or "") if image else ""
+    return Attachment(todo_id=todo_id, filename=filename, size=len(content))
+
+
 @app.post(
     "/jobs/{job_id}/run",
     tags=["jobs"],

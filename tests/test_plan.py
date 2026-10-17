@@ -154,6 +154,30 @@ def test_method_name_collisions_fall_back_to_full_names() -> None:
     assert len(set(names)) == 3
 
 
+def test_fastapi_default_operation_ids_use_the_function_name() -> None:
+    plan = plan_of(
+        {
+            "paths": {
+                "/api/match/{match_id}": {
+                    "get": op("get_match_by_id_api_match__match_id__get", tags=[]),
+                    "delete": op("reset_match_api_match__match_id__delete", tags=[]),
+                },
+                "/api/matches/by_date/{date}": {
+                    "get": op(
+                        "get_matches_by_date_api_matches_by_date__date__get", tags=[]
+                    )
+                },
+                # Not FastAPI's shape: the suffix alone is kept as written.
+                "/api/dates/": {"get": op("_api_dates__get", tags=[])},
+            }
+        }
+    )
+    names = {r.attr: [m.name for m in r.methods] for r in plan.resources}
+    assert names["match"] == ["retrieve", "reset"]
+    assert names["matches"] == ["get_by_date"]
+    assert names["dates"] == ["api_get"]
+
+
 def test_config_renames_regroups_and_excludes() -> None:
     plan = plan_of(
         {

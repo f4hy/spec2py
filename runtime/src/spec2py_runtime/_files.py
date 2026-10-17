@@ -44,12 +44,15 @@ def _one(file: FileTypes) -> HttpxFile:
 
 
 def to_httpx_files(
-    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven],
+    files: Mapping[str, FileTypes | Sequence[FileTypes] | NotGiven | None],
 ) -> list[tuple[str, HttpxFile]]:
-    """Normalize generated-client file arguments into httpx2's ``files=`` shape."""
+    """Normalize generated-client file arguments into httpx2's ``files=`` shape.
+
+    ``None`` (an optional file left out) is dropped like ``NOT_GIVEN``.
+    """
     out: list[tuple[str, HttpxFile]] = []
     for field, value in files.items():
-        if isinstance(value, NotGiven):
+        if isinstance(value, NotGiven) or value is None:
             continue
         if isinstance(value, list):
             out.extend((field, _one(item)) for item in value)

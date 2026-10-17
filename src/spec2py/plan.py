@@ -130,6 +130,16 @@ _CLIENT_RESERVED: Final = frozenset(
 _RESOURCE_RESERVED: Final = frozenset({"with_raw_response", "with_options"})
 _VERSION_SEGMENT: Final = re.compile(r"^(v\d+(\.\d+)*|api|rest)$", re.IGNORECASE)
 
+
+def _fastapi_function_name(op: Operation) -> str | None:
+    """The function name inside FastAPI's default ``{name}{path}_{method}`` id."""
+    assert op.operation_id is not None
+    suffix = re.sub(r"\W", "_", op.path) + "_" + op.method
+    if op.operation_id.endswith(suffix) and len(op.operation_id) > len(suffix):
+        return op.operation_id[: -len(suffix)]
+    return None
+
+
 _CURSOR_PARAMS: Final = (
     "cursor",
     "after",
@@ -846,7 +856,7 @@ class _Planner:
         }
         path_params = {snake(p.name) for p in op.parameters if p.location == "path"}
         if op.operation_id:
-            words = camel_words(op.operation_id)
+            words = camel_words(_fastapi_function_name(op) or op.operation_id)
             stripped = [w for w in words if w not in resource_words]
             if stripped and stripped != words:
                 words = stripped
@@ -926,7 +936,8 @@ class _Planner:
             base = oc.name or self.method_base_name(op, key)
             name = method_names[attr].claim(safe_identifier(base or op.method))
             if name != base and base:
-                full = safe_identifier(snake(op.operation_id or op.key))
+                fastapi_name = op.operation_id and _fastapi_function_name(op)
+                full = safe_identifier(snake(fastapi_name or op.operation_id or op.key))
                 if full not in method_names[attr]:
                     name = method_names[attr].claim(full)
             for method in self.plan_operation(

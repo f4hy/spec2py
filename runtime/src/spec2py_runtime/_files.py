@@ -6,8 +6,6 @@ import pathlib
 from collections.abc import Mapping, Sequence
 from typing import IO, Any, cast
 
-import pydantic
-
 from ._models import jsonable
 from ._types import FileContent, FileTypes, NotGiven
 
@@ -75,9 +73,7 @@ def to_multipart_data(fields: Mapping[str, object]) -> dict[str, str | list[str]
             isinstance(v, str | int | float) for v in cast(list[object], value)
         ):
             data[key] = [str(v) for v in cast(list[object], value)]
-        elif isinstance(value, pydantic.BaseModel | Mapping | list):
-            data[key] = json.dumps(jsonable(cast(object, value)))
         else:
-            encoded = jsonable(value)
+            encoded = jsonable(cast(object, value))
             data[key] = encoded if isinstance(encoded, str) else json.dumps(encoded)
     return data

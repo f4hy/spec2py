@@ -147,12 +147,8 @@ class OAuth2ClientCredentials(httpx2.Auth):
             "client_secret": self.client_secret,
         }
         if self._token and self._token.refresh_token:
-            data = {
-                "grant_type": "refresh_token",
-                "refresh_token": self._token.refresh_token,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            }
+            data["grant_type"] = "refresh_token"
+            data["refresh_token"] = self._token.refresh_token
         if self.scopes:
             data["scope"] = " ".join(self.scopes)
         if self.audience:

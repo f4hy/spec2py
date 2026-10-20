@@ -25,7 +25,7 @@ from collections.abc import (
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import NoneType, TracebackType
-from typing import Any, Final, Self, TypedDict, Unpack, cast
+from typing import Any, Final, Required, Self, TypedDict, Unpack, cast
 
 import anyio
 import httpx2
@@ -62,6 +62,11 @@ from ._streaming import (
 )
 from ._types import NOT_GIVEN, FileTypes, NotGiven, TimeoutTypes
 
+try:
+    from ._version import __version__
+except ImportError:  # pragma: no cover - running from a source checkout
+    __version__ = "0.0.0"
+
 __all__ = [
     "DEFAULT_MAX_RETRIES",
     "DEFAULT_TIMEOUT",
@@ -69,9 +74,11 @@ __all__ = [
     "APIResource",
     "AsyncAPIClient",
     "AsyncAPIResource",
+    "ClientOptions",
     "Hooks",
     "RequestOptions",
     "RequestSpec",
+    "__version__",
 ]
 
 logger = logging.getLogger("spec2py")
@@ -141,6 +148,22 @@ class RequestOptions(TypedDict, total=False):
     timeout: TimeoutTypes | NotGiven
 
 
+class ClientOptions(TypedDict, total=False):
+    """The keyword arguments both clients pass through to the shared core."""
+
+    base_url: Required[str]
+    auth: httpx2.Auth | None
+    timeout: TimeoutTypes
+    max_retries: int
+    default_headers: Mapping[str, str] | None
+    default_query: Mapping[str, object] | None
+    hooks: Hooks | None
+    idempotency_header: str | None
+    strict_response_validation: bool
+    instrument: bool
+    trusted_pagination_origins: Collection[str]
+
+
 def _header_value(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -159,12 +182,13 @@ def _decode_body(response: httpx2.Response) -> object:
     return response.text
 
 
-def _otel_tracer() -> Any:
+def _otel_tracer() -> tuple[Any, Any] | None:
+    """The tracer and ``SpanKind.CLIENT``, when opentelemetry is installed."""
     try:
         from opentelemetry import trace
     except ImportError:
         return None
-    return trace.get_tracer("spec2py_runtime")
+    return trace.get_tracer("spec2py_runtime"), trace.SpanKind.CLIENT
 
 
 class _BaseClient:
@@ -200,13 +224,13 @@ class _BaseClient:
         self.trusted_pagination_origins = frozenset(
             _parse_origin(o) for o in trusted_pagination_origins
         )
+        self._base_url = httpx2.URL(base_url)
+        self._base_origin = _origin(self._base_url)
         self._tracer = _otel_tracer() if instrument else None
         self._owns_http_client = True
 
-    @property
+    @functools.cached_property
     def user_agent(self) -> str:
-        from . import __version__
-
         return (
             f"{self._package}/{self._version} spec2py-runtime/{__version__} "
             f"python/{platform.python_version()}"
@@ -232,10 +256,8 @@ class _BaseClient:
         """
         new = copy.copy(self)
         # Resources are cached per client; drop them so they bind to the copy.
-        for klass in type(new).__mro__:
-            for name, attr in vars(klass).items():
-                if isinstance(attr, functools.cached_property):
-                    new.__dict__.pop(name, None)
+        for name in _cached_property_names(type(new).__mro__):
+            new.__dict__.pop(name, None)
         new._owns_http_client = False
         if not isinstance(timeout, NotGiven):
             new.timeout = timeout
@@ -288,13 +310,10 @@ class _BaseClient:
 
         kwargs: dict[str, Any] = {}
         if spec.files or spec.form is not None:
-            form = dict(spec.form or {})
-            form.update(spec.extra_body or {})
+            form = {**(spec.form or {}), **(spec.extra_body or {})}
+            kwargs["data"] = to_multipart_data(form)
             if spec.files:
                 kwargs["files"] = to_httpx_files(spec.files)
-                kwargs["data"] = to_multipart_data(form)
-            else:
-                kwargs["data"] = to_multipart_data(form)
         elif spec.content is not None and not isinstance(spec.content, NotGiven):
             kwargs["content"] = spec.content
             headers.setdefault(
@@ -328,8 +347,27 @@ class _BaseClient:
             return f"spec2py-retry-{uuid.uuid4()}"
         return None
 
-    def _auth_for(self, spec: RequestSpec) -> httpx2.Auth | None:
-        return self.auth if spec.security else None
+    @staticmethod
+    def _transport_retry_reason(
+        exc: httpx2.TransportError, request: httpx2.Request, retryable: bool
+    ) -> str:
+        """Why a failed send is retried; raises the client error when it isn't."""
+        timed_out = isinstance(exc, httpx2.TimeoutException)
+        if not retryable:
+            error = APITimeoutError if timed_out else APIConnectionError
+            raise error(request) from exc
+        return "timeout" if timed_out else type(exc).__name__
+
+    @staticmethod
+    def _stream_spec(
+        method: str, path: str, stream_format: StreamFormat, options: RequestOptions
+    ) -> RequestSpec:
+        spec = RequestSpec(method=method, path=path, **options)
+        accept = (
+            "text/event-stream" if stream_format == "sse" else "application/x-ndjson"
+        )
+        spec.extra_headers = {"Accept": accept, **(spec.extra_headers or {})}
+        return spec
 
     # -- parsing ----------------------------------------------------------------
 
@@ -437,9 +475,8 @@ class _BaseClient:
         a foreign ``Link``/cursor URL would hand those credentials to that host.
         Scheme counts too: https -> http on the same host is refused.
         """
-        base = httpx2.URL(self.base_url)
-        target = _origin(base.join(url))
-        if target == _origin(base) or target in self.trusted_pagination_origins:
+        target = _origin(self._base_url.join(url))
+        if target == self._base_origin or target in self.trusted_pagination_origins:
             return
         raise PaginationOriginError(
             url, base_url=self.base_url, request=response.request
@@ -450,18 +487,23 @@ class _BaseClient:
         if self._tracer is None:
             yield None
             return
+        tracer, kind = self._tracer
         name = f"{spec.method.upper()} {spec.path}"
-        with self._tracer.start_as_current_span(name, kind=_client_kind()) as span:
+        with tracer.start_as_current_span(name, kind=kind) as span:
             span.set_attribute("http.request.method", spec.method.upper())
             span.set_attribute("url.template", spec.path)
-            span.set_attribute("server.address", httpx2.URL(self.base_url).host)
+            span.set_attribute("server.address", self._base_url.host)
             yield span
 
 
-def _client_kind() -> Any:
-    from opentelemetry.trace import SpanKind
-
-    return SpanKind.CLIENT
+@functools.cache
+def _cached_property_names(mro: tuple[type, ...]) -> tuple[str, ...]:
+    return tuple(
+        name
+        for klass in mro
+        for name, attr in vars(klass).items()
+        if isinstance(attr, functools.cached_property)
+    )
 
 
 type Origin = tuple[str, str, int | None]
@@ -493,39 +535,17 @@ class APIClient(_BaseClient):
     def __init__(
         self,
         *,
-        base_url: str,
-        auth: httpx2.Auth | None = None,
-        timeout: TimeoutTypes = DEFAULT_TIMEOUT,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        default_headers: Mapping[str, str] | None = None,
-        default_query: Mapping[str, object] | None = None,
-        hooks: Hooks | None = None,
-        idempotency_header: str | None = None,
-        strict_response_validation: bool = False,
-        instrument: bool = True,
-        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.Client | None = None,
         transport: httpx2.BaseTransport | None = None,
+        **options: Unpack[ClientOptions],
     ) -> None:
-        super().__init__(
-            base_url=base_url,
-            auth=auth,
-            timeout=timeout,
-            max_retries=max_retries,
-            default_headers=default_headers,
-            default_query=default_query,
-            hooks=hooks,
-            idempotency_header=idempotency_header,
-            strict_response_validation=strict_response_validation,
-            instrument=instrument,
-            trusted_pagination_origins=trusted_pagination_origins,
-        )
+        super().__init__(**options)
         self._owns_http_client = http_client is None
         self._http = http_client or httpx2.Client(
-            base_url=base_url, timeout=timeout, transport=transport
+            base_url=self._base_url, timeout=self.timeout, transport=transport
         )
         if http_client is not None:
-            self._http.base_url = httpx2.URL(base_url)
+            self._http.base_url = self._base_url
 
     def close(self) -> None:
         if self._owns_http_client:
@@ -545,6 +565,7 @@ class APIClient(_BaseClient):
     def _send(self, spec: RequestSpec, *, stream: bool = False) -> httpx2.Response:
         policy = self.retry_policy
         key = self._new_idempotency_key(spec)
+        auth = self.auth if spec.security else None
         with self._span(spec) as span:
             retries_taken = 0
             while True:
@@ -557,20 +578,12 @@ class APIClient(_BaseClient):
                 for hook in self.hooks.on_request:
                     hook(request)
                 try:
-                    auth = self._auth_for(spec)
                     response = self._http.send(request, stream=stream, auth=auth)
-                except httpx2.TimeoutException as exc:
-                    if retryable:
-                        retries_taken += 1
-                        self._sleep(policy.delay(retries_taken - 1), "timeout")
-                        continue
-                    raise APITimeoutError(request) from exc
                 except httpx2.TransportError as exc:
-                    if retryable:
-                        retries_taken += 1
-                        self._sleep(policy.delay(retries_taken - 1), type(exc).__name__)
-                        continue
-                    raise APIConnectionError(request) from exc
+                    reason = self._transport_retry_reason(exc, request, retryable)
+                    self._sleep(policy.delay(retries_taken), reason)
+                    retries_taken += 1
+                    continue
                 for response_hook in self.hooks.on_response:
                     response_hook(response)
                 if span is not None:
@@ -581,9 +594,9 @@ class APIClient(_BaseClient):
                 if response.is_error:
                     if retryable and policy.should_retry_response(response):
                         response.close()
-                        retries_taken += 1
-                        delay = policy.delay(retries_taken - 1, response)
+                        delay = policy.delay(retries_taken, response)
                         self._sleep(delay, str(response.status_code))
+                        retries_taken += 1
                         continue
                     if stream:
                         response.read()
@@ -648,11 +661,7 @@ class APIClient(_BaseClient):
         **kwargs: Unpack[RequestOptions],
     ) -> StreamManager[T]:
         """Prepare a streaming request; it is sent when the manager is entered."""
-        spec = RequestSpec(method=method, path=path, **kwargs)
-        accept = (
-            "text/event-stream" if stream_format == "sse" else "application/x-ndjson"
-        )
-        spec.extra_headers = {"Accept": accept, **(spec.extra_headers or {})}
+        spec = self._stream_spec(method, path, stream_format, kwargs)
 
         def open_stream() -> Stream[T]:
             response = self._send(spec, stream=True)
@@ -672,39 +681,17 @@ class AsyncAPIClient(_BaseClient):
     def __init__(
         self,
         *,
-        base_url: str,
-        auth: httpx2.Auth | None = None,
-        timeout: TimeoutTypes = DEFAULT_TIMEOUT,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        default_headers: Mapping[str, str] | None = None,
-        default_query: Mapping[str, object] | None = None,
-        hooks: Hooks | None = None,
-        idempotency_header: str | None = None,
-        strict_response_validation: bool = False,
-        instrument: bool = True,
-        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.AsyncClient | None = None,
         transport: httpx2.AsyncBaseTransport | None = None,
+        **options: Unpack[ClientOptions],
     ) -> None:
-        super().__init__(
-            base_url=base_url,
-            auth=auth,
-            timeout=timeout,
-            max_retries=max_retries,
-            default_headers=default_headers,
-            default_query=default_query,
-            hooks=hooks,
-            idempotency_header=idempotency_header,
-            strict_response_validation=strict_response_validation,
-            instrument=instrument,
-            trusted_pagination_origins=trusted_pagination_origins,
-        )
+        super().__init__(**options)
         self._owns_http_client = http_client is None
         self._http = http_client or httpx2.AsyncClient(
-            base_url=base_url, timeout=timeout, transport=transport
+            base_url=self._base_url, timeout=self.timeout, transport=transport
         )
         if http_client is not None:
-            self._http.base_url = httpx2.URL(base_url)
+            self._http.base_url = self._base_url
 
     async def close(self) -> None:
         if self._owns_http_client:
@@ -732,6 +719,7 @@ class AsyncAPIClient(_BaseClient):
     ) -> httpx2.Response:
         policy = self.retry_policy
         key = self._new_idempotency_key(spec)
+        auth = self.auth if spec.security else None
         with self._span(spec) as span:
             retries_taken = 0
             while True:
@@ -744,22 +732,12 @@ class AsyncAPIClient(_BaseClient):
                 for hook in self.hooks.on_request:
                     await self._call_hook(hook, request)
                 try:
-                    auth = self._auth_for(spec)
                     response = await self._http.send(request, stream=stream, auth=auth)
-                except httpx2.TimeoutException as exc:
-                    if retryable:
-                        retries_taken += 1
-                        await self._sleep(policy.delay(retries_taken - 1), "timeout")
-                        continue
-                    raise APITimeoutError(request) from exc
                 except httpx2.TransportError as exc:
-                    if retryable:
-                        retries_taken += 1
-                        await self._sleep(
-                            policy.delay(retries_taken - 1), type(exc).__name__
-                        )
-                        continue
-                    raise APIConnectionError(request) from exc
+                    reason = self._transport_retry_reason(exc, request, retryable)
+                    await self._sleep(policy.delay(retries_taken), reason)
+                    retries_taken += 1
+                    continue
                 for response_hook in self.hooks.on_response:
                     await self._call_hook(response_hook, response)
                 if span is not None:
@@ -770,9 +748,9 @@ class AsyncAPIClient(_BaseClient):
                 if response.is_error:
                     if retryable and policy.should_retry_response(response):
                         await response.aclose()
-                        retries_taken += 1
-                        delay = policy.delay(retries_taken - 1, response)
+                        delay = policy.delay(retries_taken, response)
                         await self._sleep(delay, str(response.status_code))
+                        retries_taken += 1
                         continue
                     if stream:
                         await response.aread()
@@ -837,11 +815,7 @@ class AsyncAPIClient(_BaseClient):
         **kwargs: Unpack[RequestOptions],
     ) -> AsyncStreamManager[T]:
         """Prepare a streaming request; it is sent when the manager is entered."""
-        spec = RequestSpec(method=method, path=path, **kwargs)
-        accept = (
-            "text/event-stream" if stream_format == "sse" else "application/x-ndjson"
-        )
-        spec.extra_headers = {"Accept": accept, **(spec.extra_headers or {})}
+        spec = self._stream_spec(method, path, stream_format, kwargs)
 
         async def open_stream() -> AsyncStream[T]:
             response = await self._send(spec, stream=True)

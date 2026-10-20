@@ -1,5 +1,6 @@
 """Stable, collision-free, Pythonic names."""
 
+import functools
 import keyword
 import re
 import unicodedata
@@ -19,18 +20,26 @@ def _ascii(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
 
 
+_LOWER_UPPER = re.compile(r"([a-z0-9])([A-Z])")
+_ACRONYM_WORD = re.compile(r"([A-Z]+)([A-Z][a-z])")
+_SEPARATORS = re.compile(r"[^A-Za-z0-9]+")
+
+
 def camel_words(text: str) -> list[str]:
     """Split ``"listHTTPInvoices_v2"`` into ``["list", "http", "invoices", "v2"]``."""
     text = _ascii(text)
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
-    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
-    return [w.lower() for w in re.split(r"[^A-Za-z0-9]+", text) if w]
+    text = _LOWER_UPPER.sub(r"\1 \2", text)
+    text = _ACRONYM_WORD.sub(r"\1 \2", text)
+    return [w.lower() for w in _SEPARATORS.split(text) if w]
 
 
+# Large specs ask for the same few thousand names ~100k times.
+@functools.cache
 def snake(text: str) -> str:
     return "_".join(camel_words(text))
 
 
+@functools.cache
 def pascal(text: str) -> str:
     words = camel_words(text)
     return "".join(w[:1].upper() + w[1:] for w in words)

@@ -28,7 +28,8 @@ from .lint import lint
 from .loader import LoadError
 from .normalize import NormalizeError, RefError
 from .overlay import OverlayError
-from .pipeline import generate, load_api
+from .pipeline import Pipeline, generate, load_api, load_ir, write_pipeline
+from .score import scorecard
 from .surface import api_surface, diff_surfaces, suggest_version
 
 __all__ = ["main"]
@@ -110,7 +111,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     config = _config(args)
     spec = _spec(args, config)
     if args.check:
-        return _check(spec, config)
+        return _check(load_api(spec, config))
     generated = generate(spec, config.output, config)
     print(
         f"Generated {generated.package} ({len(generated.files)} files) in {config.output}"
@@ -127,13 +128,13 @@ def cmd_fastapi(args: argparse.Namespace) -> int:
     return cmd_generate(args)
 
 
-def _check(spec: str, config: Config) -> int:
+def _check(pipeline: Pipeline) -> int:
     """Regenerate into a temp dir and compare with what's on disk."""
-    pipeline = load_api(spec, config)
+    config = pipeline.config
     current = package_dir(pipeline.plan, config.output)
     with tempfile.TemporaryDirectory(prefix="spec2py-check-") as tmp:
         fresh_root = pathlib.Path(tmp)
-        generate(spec, fresh_root, config)
+        write_pipeline(pipeline, fresh_root)
         fresh = package_dir(pipeline.plan, fresh_root)
         stale: list[str] = []
         for path in sorted(fresh.rglob("*")):
@@ -188,23 +189,23 @@ def cmd_update(args: argparse.Namespace) -> int:
     else:
         print("No previous generation found; generating from scratch.")
     if args.check:
-        return _check(spec, config)
-    generate(spec, config.output, config)
+        return _check(pipeline)
+    write_pipeline(pipeline)
     print(f"Regenerated {pipeline.plan.client.package} in {config.output}")
     return 0
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
     config = _config(args)
-    pipeline = load_api(_spec(args, config), config)
-    report = lint(pipeline.api)
+    _, api, _ = load_ir(_spec(args, config), config)
+    report = lint(api)
     print(
         report.to_json()
         if args.format == "json"
         else report.render(verbose=args.verbose)
     )
     if args.fix_overlay:
-        overlay = report.overlay(pipeline.api.title)
+        overlay = report.overlay(api.title)
         pathlib.Path(args.fix_overlay).write_text(
             yaml.safe_dump(overlay, sort_keys=False), encoding="utf-8"
         )
@@ -225,15 +226,13 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
 def cmd_ir(args: argparse.Namespace) -> int:
     config = _config(args)
-    pipeline = load_api(_spec(args, config), config)
-    data = to_jsonable(pipeline.api) if args.stage == "ir" else pipeline.document
+    document, api, _ = load_ir(_spec(args, config), config)
+    data = to_jsonable(api) if args.stage == "ir" else document
     print(json.dumps(data, indent=2, sort_keys=args.stage != "ir"))
     return 0
 
 
 def cmd_score(args: argparse.Namespace) -> int:
-    from .score import scorecard
-
     config = _config(args)
     card = scorecard(_spec(args, config), config, typecheck=args.typecheck)
     print(json.dumps(card, indent=2) if args.format == "json" else card_text(card))

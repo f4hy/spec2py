@@ -61,14 +61,19 @@ _STRUCTURAL: Final = frozenset(
 )
 
 
+def media_base(media: str) -> str:
+    """``"Application/JSON; charset=utf-8"`` -> ``"application/json"``."""
+    return media.split(";", maxsplit=1)[0].strip().lower()
+
+
 def _is_json(media: str) -> bool:
-    base = media.split(";", maxsplit=1)[0].strip().lower()
+    base = media_base(media)
     return base == "application/json" or base.endswith("+json") or base == "*/*"
 
 
 def media_rank(media: str) -> int:
     """Lower is preferred when an operation offers several media types."""
-    base = media.split(";", maxsplit=1)[0].strip().lower()
+    base = media_base(media)
     if base == "application/json":
         return 0
     if base.endswith("+json"):
@@ -109,7 +114,6 @@ class _Builder:
             description=cast(Obj, document.get("info") or {}).get("description"),
         )
         self.synthetic: dict[str, str] = {}
-        self.building: set[str] = set()
 
     # -- refs --------------------------------------------------------------------
 

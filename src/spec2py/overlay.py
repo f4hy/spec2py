@@ -86,21 +86,20 @@ def apply_overlay(
                 if loc.parent is None or loc.key is None:
                     raise OverlayError("cannot remove the document root")
                 del loc.parent[loc.key]
-        elif "copy" in action:
-            sources = find(document, cast(str, action["copy"]))
-            if len(sources) != 1:
-                raise OverlayError(
-                    f"action {index}: copy source must match exactly one node"
-                )
-            for loc in locations:
-                merged = deep_merge(loc.value, copy.deepcopy(sources[0].value))
-                if loc.parent is not None:
-                    loc.set(merged)
-        elif "update" in action:
+        elif "copy" in action or "update" in action:
+            if "copy" in action:
+                sources = find(document, cast(str, action["copy"]))
+                if len(sources) != 1:
+                    raise OverlayError(
+                        f"action {index}: copy source must match exactly one node"
+                    )
+                update = copy.deepcopy(sources[0].value)
+            else:
+                update = action["update"]
             for loc in locations:
                 # Objects and arrays merge in place (including the root);
                 # scalars are replaced through their parent.
-                merged = deep_merge(loc.value, action["update"])
+                merged = deep_merge(loc.value, update)
                 if loc.parent is not None:
                     loc.set(merged)
         report.applied += 1

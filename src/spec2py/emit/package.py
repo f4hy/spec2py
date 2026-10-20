@@ -22,7 +22,7 @@ from .client import emit_client
 from .models import emit_models
 from .notes import render_notes
 from .pyast import const, doc_expr, unparse
-from .resources import emit_resource
+from .resources import emit_resource, twin_names
 
 __all__ = ["MANIFEST", "GeneratedPackage", "render_package", "write_package"]
 
@@ -114,12 +114,8 @@ def _resources_init(plan: Plan) -> ast.Module:
     body: list[ast.stmt] = [doc_expr("API resources, one module per resource.")]
     exports: list[str] = []
     for r in plan.resources:
-        names = [
-            r.class_name,
-            f"Async{r.class_name}",
-            f"{r.class_name}WithRawResponse",
-            f"Async{r.class_name}WithRawResponse",
-        ]
+        twins = twin_names(r.class_name)
+        names = [*twins, *twins.values()]
         body.append(ast.ImportFrom(r.attr, [ast.alias(n) for n in names], 1))
         exports.extend(names)
     body.append(

@@ -1,17 +1,19 @@
 """Derive sync code from async code mechanically (the approach ``unasync`` popularized).
 
 Resources and clients are generated once, as async AST. This transformer turns
-a deep copy into the sync variant: ``async def`` becomes ``def``, ``await x``
+a freshly built copy into the sync variant: ``async def`` becomes ``def``, ``await x``
 becomes ``x``, ``async for``/``async with`` lose ``async``, and async names are
 renamed through an explicit table. The two variants can never drift.
 """
 
 import ast
-import copy
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Final
 
-__all__ = ["RUNTIME_RENAMES", "to_sync"]
+from ..plan import RUNTIME
+from .pyast import Imports, const, doc_expr
+
+__all__ = ["RUNTIME_RENAMES", "to_sync", "twin_module"]
 
 RUNTIME_RENAMES: Final = {
     "AsyncAPIClient": "APIClient",
@@ -74,12 +76,38 @@ class _Unasync(ast.NodeTransformer):
         node.attr = self._rename(node.attr)
         return node
 
-    def visit_arg(self, node: ast.arg) -> ast.arg:
-        self.generic_visit(node)
-        return node
-
 
 def to_sync[N: ast.AST](node: N, renames: Mapping[str, str]) -> N:
-    """Return a sync copy of async ``node``, renaming via ``renames`` + runtime names."""
+    """Turn async ``node`` into sync in place, renaming via ``renames`` + runtime names."""
     table = {**RUNTIME_RENAMES, **renames}
-    return _Unasync(table).visit(copy.deepcopy(node))  # type: ignore[no-any-return]
+    return _Unasync(table).visit(node)  # type: ignore[no-any-return]
+
+
+def twin_module(
+    doc: str,
+    imports: Imports,
+    renames: Mapping[str, str],
+    *builders: Callable[[], ast.ClassDef],
+) -> ast.Module:
+    """A module with each built async class preceded by its sync twin.
+
+    Each builder runs twice (building is cheaper than ``copy.deepcopy``), so it
+    must be deterministic.
+    """
+    classes: list[ast.ClassDef] = []
+    for build in builders:
+        async_cls = build()
+        classes += [to_sync(build(), renames), async_cls]
+    # The sync twins use the sync runtime names; import those too.
+    for (module, name), _ in imports.used():
+        if module == RUNTIME and name in RUNTIME_RENAMES:
+            imports.name(RUNTIME, RUNTIME_RENAMES[name])
+    return ast.Module(
+        body=[
+            doc_expr(doc),
+            *imports.statements(),
+            ast.Assign([ast.Name("__all__")], const([c.name for c in classes])),
+            *classes,
+        ],
+        type_ignores=[],
+    )

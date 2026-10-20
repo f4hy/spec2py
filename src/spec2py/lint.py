@@ -253,7 +253,12 @@ def lint(api: API) -> LintReport:
                     f"{op.key} {p.name}",
                 )
 
+    inline_enums: dict[tuple[object, ...], list[str]] = defaultdict(list)
     for where, s in _schemas_in(api):
+        if s.kind is Kind.ENUM and not (
+            where.startswith("#/components/schemas/") and "." not in where
+        ):
+            inline_enums[tuple(s.values)].append(where)
         if (
             s.kind is Kind.UNION
             and s.union_kind in ("oneOf", "anyOf")
@@ -298,12 +303,6 @@ def lint(api: API) -> LintReport:
                 consequence,
                 where,
             )
-    inline_enums: dict[tuple[object, ...], list[str]] = defaultdict(list)
-    for where, s in _schemas_in(api):
-        if s.kind is Kind.ENUM and not (
-            where.startswith("#/components/schemas/") and "." not in where
-        ):
-            inline_enums[tuple(s.values)].append(where)
     for values, wheres in inline_enums.items():
         if len(wheres) > 1:
             add(

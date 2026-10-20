@@ -14,14 +14,15 @@ from .pyast import (
     TUnion,
     TypeExpr,
     arg,
+    attr,
     call,
     const,
     doc_expr,
     docstring,
 )
-from .unasync import RUNTIME_RENAMES, to_sync
+from .unasync import RUNTIME_RENAMES, twin_module
 
-__all__ = ["emit_resource", "resource_class_names"]
+__all__ = ["emit_resource", "twin_names"]
 
 _NOT_GIVEN = TName("NotGiven", RUNTIME)
 _BUILTIN_NAMES = frozenset(dir(builtins))
@@ -46,9 +47,8 @@ _RUNTIME_NAMES = (
 )
 
 
-def resource_class_names(resource: PResource) -> dict[str, str]:
-    """Async -> sync class names for a resource."""
-    name = resource.class_name
+def twin_names(name: str) -> dict[str, str]:
+    """Async -> sync class names for a client or resource class ``name``."""
     return {
         f"Async{name}": name,
         f"Async{name}WithRawResponse": f"{name}WithRawResponse",
@@ -60,9 +60,8 @@ class _ResourceEmitter:
         self.plan = plan
         self.resource = resource
         self.aliases = aliases
-        names = resource_class_names(resource)
+        names = twin_names(resource.class_name)
         self.imports = Imports(
-            package=plan.client.package,
             here="resources." + resource.attr,
             reserved=[*names, *names.values()],
         )
@@ -190,10 +189,8 @@ class _ResourceEmitter:
 
     # -- body ------------------------------------------------------------------
 
-    def mapping(self, params: list[PParam], *, key: str = "wire") -> ast.Dict:
-        keys: list[ast.expr | None] = [
-            const(p.wire_name if key == "wire" else p.py_name) for p in params
-        ]
+    def mapping(self, params: list[PParam]) -> ast.Dict:
+        keys: list[ast.expr | None] = [const(p.wire_name) for p in params]
         return ast.Dict(keys, [ast.Name(p.py_name) for p in params])
 
     def request_kwargs(self, method: PMethod) -> list[ast.keyword]:
@@ -259,15 +256,12 @@ class _ResourceEmitter:
         if method.errors:
             kw["errors"] = ast.Dict(
                 [const(k) for k, _ in method.errors],
-                [self.cast_value(t) for _, t in method.errors],
+                # Error models are looked up at runtime, so any expression works.
+                [self.ann(t) for _, t in method.errors],
             )
         for name in ("extra_headers", "extra_query", "extra_body", "timeout"):
             kw[name] = ast.Name(name)
         return [ast.keyword(k, v) for k, v in kw.items()]
-
-    def cast_value(self, t: TypeExpr) -> ast.expr:
-        # Error models are looked up at runtime, so any expression works.
-        return self.ann(t)
 
     def path_expr(self, method: PMethod) -> ast.expr:
         path_params = [p for p in method.params if p.location == "path"]
@@ -283,7 +277,7 @@ class _ResourceEmitter:
 
     def method(self, method: PMethod) -> ast.stmt:
         self.body_shadowed = {p.py_name for p in method.params} & _BUILTIN_NAMES
-        client = ast.Attribute(ast.Attribute(ast.Name("self"), "_client"), "request")
+        client = attr("self", "_client", "request")
         verb = const(method.http_method)
         path = self.path_expr(method)
         kwargs = self.request_kwargs(method)
@@ -297,9 +291,7 @@ class _ResourceEmitter:
                     self.rt(pg.strategy), **{k: const(v) for k, v in pg.options.items()}
                 )
                 value: ast.expr = call(
-                    ast.Attribute(
-                        ast.Attribute(ast.Name("self"), "_client"), "get_api_list"
-                    ),
+                    attr("self", "_client", "get_api_list"),
                     verb,
                     path,
                     item_type=self.cast_target(pg.item_type),
@@ -310,7 +302,7 @@ class _ResourceEmitter:
                 assert method.stream is not None
                 st = method.stream
                 value = call(
-                    ast.Attribute(ast.Attribute(ast.Name("self"), "_client"), "stream"),
+                    attr("self", "_client", "stream"),
                     verb,
                     path,
                     event_type=self.cast_target(st.event_type),
@@ -419,27 +411,12 @@ class _ResourceEmitter:
         )
 
     def module(self) -> ast.Module:
-        async_cls = self.resource_class()
-        async_raw = self.raw_class()
-        renames = resource_class_names(self.resource)
-        sync_cls = to_sync(async_cls, renames)
-        sync_raw = to_sync(async_raw, renames)
-        # The sync twin uses the sync runtime names; import those too.
-        for (module, name), _ in list(self.imports.used()):
-            if module == RUNTIME and name in RUNTIME_RENAMES:
-                self.imports.name(RUNTIME, RUNTIME_RENAMES[name])
-        names = [sync_cls.name, async_cls.name, sync_raw.name, async_raw.name]
-        return ast.Module(
-            body=[
-                doc_expr(f"The ``{self.resource.attr}`` resource."),
-                *self.imports.statements(),
-                ast.Assign([ast.Name("__all__")], ast.List([const(n) for n in names])),
-                sync_cls,
-                async_cls,
-                sync_raw,
-                async_raw,
-            ],
-            type_ignores=[],
+        return twin_module(
+            f"The ``{self.resource.attr}`` resource.",
+            self.imports,
+            twin_names(self.resource.class_name),
+            self.resource_class,
+            self.raw_class,
         )
 
 

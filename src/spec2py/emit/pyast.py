@@ -8,7 +8,7 @@ small ``TypeExpr`` trees that render to AST and record the imports they need.
 import ast
 import textwrap
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -39,10 +39,7 @@ MODELS: Final = "<models>"
 class Imports:
     """Collects ``from x import y`` statements and resolves local-name clashes."""
 
-    def __init__(
-        self, *, package: str, here: str, reserved: Iterable[str] = ()
-    ) -> None:
-        self.package = package
+    def __init__(self, *, here: str, reserved: Iterable[str] = ()) -> None:
         self.here = here
         self._names: dict[tuple[str, str], str] = {}
         self._taken: set[str] = set(reserved)
@@ -93,9 +90,6 @@ class Imports:
     def module(self, module: str) -> str:
         self._modules.add(module)
         return module
-
-    def reserve(self, *names: str) -> None:
-        self._taken.update(names)
 
     def _resolve(self, module: str) -> str:
         if module != MODELS:
@@ -199,6 +193,9 @@ class TSub(TypeExpr):
         return f"{self.base.render()}[{', '.join(a.render() for a in self.args)}]"
 
 
+_NOT_GIVEN: Final = TName("NotGiven", "spec2py_runtime")
+
+
 @dataclass(frozen=True, slots=True)
 class TUnion(TypeExpr):
     members: tuple[TypeExpr, ...]
@@ -224,11 +221,7 @@ class TUnion(TypeExpr):
                 for m in flat
             ]
         # None and NotGiven go last, as people write them.
-        flat.sort(
-            key=lambda t: (
-                2 if t == TName("NotGiven", "spec2py_runtime") else int(t.is_none)
-            )
-        )
+        flat.sort(key=lambda t: 2 if t == _NOT_GIVEN else int(t.is_none))
         return flat[0] if len(flat) == 1 else TUnion(tuple(flat))
 
     def static(self) -> TypeExpr:
@@ -377,7 +370,3 @@ def const(value: Any) -> ast.expr:
 
 def arg(name: str, annotation: ast.expr | None = None) -> ast.arg:
     return ast.arg(name, annotation)
-
-
-def names_in(nodes: Sequence[ast.AST]) -> set[str]:
-    return {n.id for node in nodes for n in ast.walk(node) if isinstance(n, ast.Name)}

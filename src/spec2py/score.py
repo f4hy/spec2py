@@ -13,7 +13,7 @@ from typing import Any
 
 from .config import Config
 from .emit.package import package_dir
-from .pipeline import generate, load_api
+from .pipeline import load_api, write_pipeline
 
 __all__ = ["scorecard"]
 
@@ -21,12 +21,12 @@ __all__ = ["scorecard"]
 def scorecard(
     source: str, config: Config, *, typecheck: bool = False
 ) -> dict[str, Any]:
-    pipeline = load_api(source, config)
+    pipeline = load_api(source, config.replace(layout="package"))
     plan = pipeline.plan
     methods = [m for r in plan.resources for m in r.methods]
     with tempfile.TemporaryDirectory(prefix="spec2py-score-") as tmp:
         out = pathlib.Path(tmp)
-        generated = generate(source, out, config.replace(layout="package"))
+        generated = write_pipeline(pipeline, out)
         py_files = {k: v for k, v in generated.files.items() if k.endswith(".py")}
         loc = sum(
             1

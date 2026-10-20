@@ -14,8 +14,9 @@ from .loader import load_spec
 from .normalize import normalize
 from .overlay import OverlayReport
 from .plan import Plan, plan_api
+from .surface import api_surface
 
-__all__ = ["Pipeline", "generate", "load_api"]
+__all__ = ["Pipeline", "generate", "load_api", "load_ir", "write_pipeline"]
 
 
 @dataclass(slots=True)
@@ -34,12 +35,21 @@ class Pipeline:
         return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def load_api(source: str, config: Config | None = None) -> Pipeline:
-    """Run load -> normalize -> IR -> plan for ``source``."""
+def load_ir(
+    source: str, config: Config | None = None
+) -> tuple[dict[str, Any], API, list[OverlayReport]]:
+    """Run load -> normalize -> IR for ``source``: the normalized document, the IR
+    and the overlay reports. For commands that never need the plan."""
     config = config or Config()
     raw, base, reports = load_spec(source, config.overlays)
     document = normalize(raw, base)
-    api = build_ir(document)
+    return document, build_ir(document), reports
+
+
+def load_api(source: str, config: Config | None = None) -> Pipeline:
+    """Run load -> normalize -> IR -> plan for ``source``."""
+    config = config or Config()
+    document, api, reports = load_ir(source, config)
     plan = plan_api(api, config)
     return Pipeline(
         config=config, document=document, api=api, plan=plan, overlay_reports=reports
@@ -52,11 +62,15 @@ def generate(
     config: Config | None = None,
 ) -> GeneratedPackage:
     """Generate a client package for ``source`` into ``output``."""
-    config = config or Config()
-    pipeline = load_api(source, config)
-    out = pathlib.Path(output) if output is not None else config.output
-    from .surface import api_surface
+    return write_pipeline(load_api(source, config), output)
 
+
+def write_pipeline(
+    pipeline: Pipeline, output: pathlib.Path | str | None = None
+) -> GeneratedPackage:
+    """Write the client for an already loaded ``pipeline`` into ``output``."""
+    config = pipeline.config
+    out = pathlib.Path(output) if output is not None else config.output
     return write_package(
         pipeline.plan,
         out,

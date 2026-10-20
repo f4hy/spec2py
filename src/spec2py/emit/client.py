@@ -2,6 +2,7 @@
 
 import ast
 
+from ..loader import is_url
 from ..plan import RUNTIME, PAuth, Plan, PResource
 from .pyast import (
     Imports,
@@ -10,13 +11,14 @@ from .pyast import (
     TSub,
     TUnion,
     arg,
+    attr,
     call,
     const,
     doc_expr,
     docstring,
 )
-from .resources import resource_class_names
-from .unasync import RUNTIME_RENAMES, to_sync
+from .resources import twin_names
+from .unasync import RUNTIME_RENAMES, twin_module
 
 __all__ = ["emit_client"]
 
@@ -25,16 +27,11 @@ class _ClientEmitter:
     def __init__(self, plan: Plan) -> None:
         self.plan = plan
         self.client = plan.client
-        name = self.client.class_name
-        self.renames = {
-            f"Async{name}": name,
-            f"Async{name}WithRawResponse": f"{name}WithRawResponse",
-        }
+        self.renames = twin_names(self.client.class_name)
         for r in plan.resources:
-            self.renames.update(resource_class_names(r))
+            self.renames.update(twin_names(r.class_name))
         self.custom_locals: dict[str, str] = {}
         self.imports = Imports(
-            package=self.client.package,
             here="_client",
             reserved=[*self.renames, *self.renames.values()],
         )
@@ -45,7 +42,7 @@ class _ClientEmitter:
 
     def resource_import(self, r: PResource, *, raw: bool = False) -> None:
         module = f".resources.{r.attr}"
-        names = resource_class_names(r)
+        names = twin_names(r.class_name)
         for async_name, sync_name in names.items():
             if raw == async_name.endswith("WithRawResponse"):
                 self.imports.preassign(module, async_name, sync_name)
@@ -74,12 +71,7 @@ class _ClientEmitter:
                             ast.Compare(ast.Name(py), [ast.IsNot()], [const(None)]),
                             ast.Name(py),
                             call(
-                                ast.Attribute(
-                                    ast.Attribute(
-                                        ast.Name(self.imports.module("os")), "environ"
-                                    ),
-                                    "get",
-                                ),
+                                attr(self.imports.module("os"), "environ", "get"),
                                 const(env),
                             ),
                         ),
@@ -136,7 +128,7 @@ class _ClientEmitter:
             case "oauth2":
                 token_url = auth.token_url or "/oauth/token"
                 token_expr: ast.expr = const(token_url)
-                if not token_url.startswith(("http://", "https://")):
+                if not is_url(token_url):
                     token_expr = call(
                         "str",
                         call(
@@ -229,9 +221,7 @@ class _ClientEmitter:
 
         env_base = f"{c.env_prefix}_BASE_URL"
         environ_get = call(
-            ast.Attribute(
-                ast.Attribute(ast.Name(self.imports.module("os")), "environ"), "get"
-            ),
+            attr(self.imports.module("os"), "environ", "get"),
             const(env_base),
         )
         base_value: ast.expr = ast.BoolOp(ast.Or(), [ast.Name("base_url"), environ_get])
@@ -418,9 +408,7 @@ class _ClientEmitter:
                     ast.Name(klass),
                     call(
                         klass,
-                        ast.Attribute(
-                            ast.Attribute(ast.Name("self"), "_client"), r.attr
-                        ),
+                        attr("self", "_client", r.attr),
                     ),
                 )
             )
@@ -434,25 +422,12 @@ class _ClientEmitter:
         )
 
     def module(self) -> ast.Module:
-        async_client = self.client_class()
-        async_raw = self.raw_class()
-        sync_client = to_sync(async_client, self.renames)
-        sync_raw = to_sync(async_raw, self.renames)
-        for (module, name), _ in self.imports.used():
-            if module == RUNTIME and name in RUNTIME_RENAMES:
-                self.imports.name(RUNTIME, RUNTIME_RENAMES[name])
-        names = [sync_client.name, async_client.name, sync_raw.name, async_raw.name]
-        return ast.Module(
-            body=[
-                doc_expr(f"Clients for the {self.client.api_name}."),
-                *self.imports.statements(),
-                ast.Assign([ast.Name("__all__")], ast.List([const(n) for n in names])),
-                sync_client,
-                async_client,
-                sync_raw,
-                async_raw,
-            ],
-            type_ignores=[],
+        return twin_module(
+            f"Clients for the {self.client.api_name}.",
+            self.imports,
+            self.renames,
+            self.client_class,
+            self.raw_class,
         )
 
 

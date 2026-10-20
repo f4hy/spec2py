@@ -11,7 +11,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, cast
 
-from .build_ir import media_rank
+from .build_ir import media_base, media_rank
 from .config import Config, OperationConfig, PaginationConfig, _pagination
 from .emit.pyast import (
     MODELS,
@@ -25,6 +25,7 @@ from .emit.pyast import (
     TypeExpr,
 )
 from .ir import API, Kind, Operation, Parameter, Property, Response, Schema
+from .loader import is_url
 from .naming import NameRegistry, camel_words, pascal, safe_identifier, singular, snake
 
 __all__ = [
@@ -412,6 +413,11 @@ def _is_title_noise(word: str) -> bool:
     )
 
 
+def _tolerant(literal: TLiteral) -> TypeExpr:
+    """A ``Literal`` that also accepts unknown values (enums grow)."""
+    return TAnnotated(literal, (TName("Tolerant", RUNTIME),))
+
+
 def _literal_ok(values: Iterable[Any]) -> bool:
     return all(isinstance(v, str | int | bool) for v in values)
 
@@ -471,6 +477,10 @@ class _Planner:
         if text not in self.notes:
             self.notes.append(text)
 
+    def note_lossy(self, name: str, s: Schema) -> None:
+        for lossy in s.lossy:
+            self.note(f"`{name}`: {lossy}.")
+
     # -- discriminators ------------------------------------------------------
 
     def collect_discriminators(self) -> None:
@@ -526,7 +536,7 @@ class _Planner:
 
     def type_of(self, schema: Schema, hint: str, ctx: Ctx) -> TypeExpr:
         t = self._type_of(schema, hint, ctx)
-        if schema.nullable and not t.is_none:
+        if schema.nullable:
             t = TUnion.of(t, TNone())
         return t
 
@@ -586,7 +596,7 @@ class _Planner:
                 if (key := (id(s), "enum")) in self.inline:
                     return self.inline[key]
                 name = self.new_model_name(hint)
-                tolerant = TAnnotated(literal, (TName("Tolerant", RUNTIME),))
+                tolerant = _tolerant(literal)
                 self.decls[name] = PAlias(
                     name, tolerant, doc=s.description, source=f"inline enum: {hint}"
                 )
@@ -673,7 +683,8 @@ class _Planner:
 
     def plan_field(self, owner: str, prop: Property, registry: NameRegistry) -> PField:
         py = registry.claim(self.field_name(prop.name), suffix="_")
-        if py != prop.name and safe_identifier(snake(prop.name)) != snake(prop.name):
+        wire = snake(prop.name)
+        if py != prop.name and safe_identifier(wire) != wire:
             self.note(
                 f"`{owner}.{prop.name}` is exposed as `{py}` (not a valid Python name)."
             )
@@ -681,10 +692,7 @@ class _Planner:
         required = prop.required and not prop.schema.write_only
         default: Any = MISSING
         if not required:
-            if not ftype.is_none and not (
-                isinstance(ftype, TUnion) and any(m.is_none for m in ftype.members)
-            ):
-                ftype = TUnion.of(ftype, TNone())
+            ftype = TUnion.of(ftype, TNone())
             default = None
         return PField(
             py_name=py,
@@ -780,8 +788,7 @@ class _Planner:
                 model.fields[model.fields.index(existing)] = tagged
             else:
                 model.fields.append(tagged)
-        for lossy in s.lossy:
-            self.note(f"`{name}`: {lossy}.")
+        self.note_lossy(name, s)
         if s.additional is not None:
             model.extra = self.type_of(s.additional, name + "Extra", "field")
         return model
@@ -797,15 +804,12 @@ class _Planner:
             self.declare_object(name, s, source=source, component=component)
             return
         if s.kind is Kind.ENUM and _literal_ok(s.values):
-            t: TypeExpr = TAnnotated(
-                TLiteral(tuple(s.values)), (TName("Tolerant", RUNTIME),)
-            )
+            t: TypeExpr = _tolerant(TLiteral(tuple(s.values)))
             if s.nullable:
                 t = TUnion.of(t, TNone())
         else:
             t = self.type_of(s, name, "field")
-        for lossy in s.lossy:
-            self.note(f"`{name}`: {lossy}.")
+        self.note_lossy(name, s)
         self.decls[name] = PAlias(name, t, doc=s.description or s.title, source=source)
 
     def ordered_models(self) -> list[PModel | PAlias]:
@@ -991,30 +995,21 @@ class _Planner:
             streaming = PMethod(
                 name=stream_name, http_method=op.method, path=method.path, operation=op
             )
-            streaming.security = method.security
-            streaming.params = [
+            rest = [
                 p
                 for p in method.params
                 if not (p.location == "body" and p.wire_name == "stream")
             ]
-            streaming.body_mode, streaming.body_model = (
-                method.body_mode,
-                method.body_model,
-            )
-            streaming.content_type, streaming.query_styles = (
-                method.content_type,
-                method.query_styles,
-            )
+            streaming.security = method.security
+            streaming.params = rest
+            streaming.body_mode = method.body_mode
+            streaming.body_model = method.body_model
+            streaming.content_type = method.content_type
+            streaming.query_styles = method.query_styles
             streaming.errors = method.errors
-            if any(
-                p.location == "body" and p.wire_name == "stream" for p in method.params
-            ):
+            if len(rest) < len(method.params):
                 streaming.fixed_body = {"stream": True}
-                method.params = [
-                    p
-                    for p in method.params
-                    if not (p.location == "body" and p.wire_name == "stream")
-                ]
+                method.params = list(rest)
             assert stream_format is not None and response is not None
             self.make_stream(streaming, response, stream_format, hint)
             methods.append(streaming)
@@ -1052,7 +1047,7 @@ class _Planner:
         body = op.request_body
         if body is None:
             return
-        media = body.media_type.split(";")[0].strip().lower()
+        media = media_base(body.media_type)
         if media_rank(media) <= 1:
             self.plan_json_body(method, body.schema, body.required, hint, names)
         elif media in ("multipart/form-data", "application/x-www-form-urlencoded"):
@@ -1179,7 +1174,7 @@ class _Planner:
     def return_type(self, response: Response | None, hint: str) -> TypeExpr:
         if response is None or response.media_type is None:
             return TNone()
-        media = response.media_type.split(";")[0].strip().lower()
+        media = media_base(response.media_type)
         if media_rank(media) <= 1:
             if response.schema is None:
                 return TName("object")
@@ -1222,7 +1217,7 @@ class _Planner:
             return cast(Literal["sse", "ndjson"], ext)
         if response is None:
             return None
-        bases = {m.split(";")[0].strip().lower() for m in response.media_types}
+        bases = {media_base(m) for m in response.media_types}
         if bases & set(_SSE):
             return "sse"
         if bases & set(_NDJSON):
@@ -1508,7 +1503,7 @@ class _Planner:
         base_url = cfg.base_url
         if base_url is None and self.api.servers:
             url = self.api.servers[0].url
-            base_url = url if url.startswith(("http://", "https://")) else None
+            base_url = url if is_url(url) else None
             if base_url is None:
                 self.note(
                     f"Server URL `{url}` is relative; clients must pass `base_url` (or set `{env_prefix}_BASE_URL`)."

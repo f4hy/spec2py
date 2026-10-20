@@ -12,7 +12,7 @@ import urllib.parse
 from collections.abc import Callable
 from typing import Any, cast
 
-from ..loader import fetch_text, is_url, parse_document
+from ..loader import is_url, load_document
 
 __all__ = ["RefError", "bundle", "resolve_pointer", "unescape_pointer"]
 
@@ -116,8 +116,6 @@ class _Bundler:
                 if k != "$ref"
             }
             local = self.ref(ref, base, external=external)
-            if isinstance(local, dict) and "$ref" in local:
-                return {**cast(dict[str, JSON], local), **siblings}
             if isinstance(local, dict):
                 return {**cast(dict[str, JSON], local), **siblings}
             return local
@@ -164,12 +162,9 @@ class _Bundler:
 
 
 def _default_loader(uri: str) -> JSON:
-    if is_url(uri):
-        return parse_document(fetch_text(uri), uri)
-    path = pathlib.Path(uri)
-    if not path.is_file():
+    if not is_url(uri) and not pathlib.Path(uri).is_file():
         raise RefError(f"referenced document not found: {uri}")
-    return parse_document(path.read_text(encoding="utf-8"), uri)
+    return load_document(uri)
 
 
 def bundle(

@@ -115,7 +115,6 @@ class RequestBody:
     required: bool = False
     description: str | None = None
     media_types: list[str] = field(default_factory=list[str])
-    binary_fields: list[str] = field(default_factory=list[str])
 
 
 @dataclass(slots=True)

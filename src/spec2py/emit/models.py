@@ -20,10 +20,9 @@ def _field_value(f: PField, imports: Imports) -> ast.expr | None:
         kwargs["deprecated"] = const(True)
     if not kwargs:
         return None if f.default is MISSING else const(f.default)
-    args: list[ast.expr] = []
     if f.default is not MISSING:
         kwargs = {"default": const(f.default), **kwargs}
-    return call(ast.Name(imports.name("pydantic", "Field")), *args, **kwargs)
+    return call(ast.Name(imports.name("pydantic", "Field")), **kwargs)
 
 
 def _model(model: PModel, imports: Imports) -> ast.ClassDef:
@@ -88,9 +87,7 @@ module: type checkers (pyright in particular) stop resolving symbols in very
 large files."""
 
 
-def _module(
-    plan: Plan, decls: list[PModel | PAlias], imports: Imports
-) -> list[ast.stmt]:
+def _module(decls: list[PModel | PAlias], imports: Imports) -> list[ast.stmt]:
     body: list[ast.stmt] = []
     for decl in decls:
         if isinstance(decl, PModel):
@@ -118,11 +115,10 @@ def emit_models(plan: Plan) -> dict[str, ast.Module]:
         return _emit_split(plan)
     names = [m.name for m in plan.models]
     imports = Imports(
-        package=plan.client.package,
         here=MODELS,
         reserved=[*names, *_field_names(plan.models)],
     )
-    body = _module(plan, plan.models, imports)
+    body = _module(plan.models, imports)
     header: list[ast.stmt] = [
         doc_expr(f"Models for the {plan.client.api_name}."),
         *imports.statements(),
@@ -207,12 +203,11 @@ def _emit_split(plan: Plan) -> dict[str, ast.Module]:
     for chunk, decls in sorted(chunks.items()):
         own = [d.name for d in decls]
         imports = Imports(
-            package=plan.client.package,
             here=f"models.{chunk}",
             reserved=[*own, *_field_names(decls)],
         )
         imports.model_modules = layout
-        body = _module(plan, decls, imports)
+        body = _module(decls, imports)
         if chunk != "_aliases":
             eager = {b for d in decls if isinstance(d, PModel) for b in d.bases}
             for (module, name), _ in imports.used():
@@ -231,7 +226,7 @@ def _emit_split(plan: Plan) -> dict[str, ast.Module]:
             ],
             type_ignores=[],
         )
-    imports = Imports(package=plan.client.package, here="models")
+    imports = Imports(here="models")
     init: list[ast.stmt] = [doc_expr(f"Models for the {plan.client.api_name}.")]
     for chunk, decls in sorted(chunks.items()):
         init.append(ast.ImportFrom(chunk, [ast.alias(d.name) for d in decls], 1))

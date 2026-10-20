@@ -74,6 +74,13 @@ async def test_round_trip_auth_upload_and_stream(
             "see this",
         )
 
+        # A default FastAPI operationId names the method after the function,
+        # and an optional file can be omitted or passed as None.
+        image = await client.todos.upload_image(1, image=("a.png", b"png"))
+        assert (image.filename, image.size) == ("a.png", 3)
+        assert (await client.todos.upload_image(1, image=None)).size == 0
+        assert (await client.todos.upload_image(1)).size == 0
+
         async with client.jobs.run("build") as events:
             steps = [e async for e in events]
         assert [s.step for s in steps] == [1, 2, 3]

@@ -22,9 +22,6 @@ dependencies = [
     "pydantic>=2.12",
 ]
 
-[project.optional-dependencies]
-otel = ["opentelemetry-api>=1.30"]
-
 [project.urls]
 Homepage = "https://github.com/f4hy/spec2py"
 

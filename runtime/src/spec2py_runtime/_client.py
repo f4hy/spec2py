@@ -18,11 +18,9 @@ from collections.abc import (
     Awaitable,
     Callable,
     Collection,
-    Generator,
     Mapping,
     Sequence,
 )
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import NoneType, TracebackType
 from typing import Any, Final, Required, Self, TypedDict, Unpack, cast
@@ -160,7 +158,6 @@ class ClientOptions(TypedDict, total=False):
     hooks: Hooks | None
     idempotency_header: str | None
     strict_response_validation: bool
-    instrument: bool
     trusted_pagination_origins: Collection[str]
 
 
@@ -182,15 +179,6 @@ def _decode_body(response: httpx2.Response) -> object:
     return response.text
 
 
-def _otel_tracer() -> tuple[Any, Any] | None:
-    """The tracer and ``SpanKind.CLIENT``, when opentelemetry is installed."""
-    try:
-        from opentelemetry import trace
-    except ImportError:
-        return None
-    return trace.get_tracer("spec2py_runtime"), trace.SpanKind.CLIENT
-
-
 class _BaseClient:
     """Request building, parsing and error mapping shared by both clients."""
 
@@ -209,7 +197,6 @@ class _BaseClient:
         hooks: Hooks | None = None,
         idempotency_header: str | None = None,
         strict_response_validation: bool = False,
-        instrument: bool = True,
         trusted_pagination_origins: Collection[str] = (),
     ) -> None:
         self.base_url = base_url
@@ -226,7 +213,6 @@ class _BaseClient:
         )
         self._base_url = httpx2.URL(base_url)
         self._base_origin = _origin(self._base_url)
-        self._tracer = _otel_tracer() if instrument else None
         self._owns_http_client = True
 
     @functools.cached_property
@@ -482,19 +468,6 @@ class _BaseClient:
             url, base_url=self.base_url, request=response.request
         )
 
-    @contextmanager
-    def _span(self, spec: RequestSpec) -> Generator[Any]:
-        if self._tracer is None:
-            yield None
-            return
-        tracer, kind = self._tracer
-        name = f"{spec.method.upper()} {spec.path}"
-        with tracer.start_as_current_span(name, kind=kind) as span:
-            span.set_attribute("http.request.method", spec.method.upper())
-            span.set_attribute("url.template", spec.path)
-            span.set_attribute("server.address", self._base_url.host)
-            yield span
-
 
 @functools.cache
 def _cached_property_names(mro: tuple[type, ...]) -> tuple[str, ...]:
@@ -566,43 +539,37 @@ class APIClient(_BaseClient):
         policy = self.retry_policy
         key = self._new_idempotency_key(spec)
         auth = self.auth if spec.security else None
-        with self._span(spec) as span:
-            retries_taken = 0
-            while True:
-                request = self._build_request(
-                    self._http, spec, idempotency_key=key, retries_taken=retries_taken
-                )
-                retryable = retries_taken < policy.max_retries and policy.can_retry(
-                    request, self.idempotency_header
-                )
-                for hook in self.hooks.on_request:
-                    hook(request)
-                try:
-                    response = self._http.send(request, stream=stream, auth=auth)
-                except httpx2.TransportError as exc:
-                    reason = self._transport_retry_reason(exc, request, retryable)
-                    self._sleep(policy.delay(retries_taken), reason)
+        retries_taken = 0
+        while True:
+            request = self._build_request(
+                self._http, spec, idempotency_key=key, retries_taken=retries_taken
+            )
+            retryable = retries_taken < policy.max_retries and policy.can_retry(
+                request, self.idempotency_header
+            )
+            for hook in self.hooks.on_request:
+                hook(request)
+            try:
+                response = self._http.send(request, stream=stream, auth=auth)
+            except httpx2.TransportError as exc:
+                reason = self._transport_retry_reason(exc, request, retryable)
+                self._sleep(policy.delay(retries_taken), reason)
+                retries_taken += 1
+                continue
+            for response_hook in self.hooks.on_response:
+                response_hook(response)
+            if response.is_error:
+                if retryable and policy.should_retry_response(response):
+                    response.close()
+                    delay = policy.delay(retries_taken, response)
+                    self._sleep(delay, str(response.status_code))
                     retries_taken += 1
                     continue
-                for response_hook in self.hooks.on_response:
-                    response_hook(response)
-                if span is not None:
-                    span.set_attribute(
-                        "http.response.status_code", response.status_code
-                    )
-                    span.set_attribute("http.request.resend_count", retries_taken)
-                if response.is_error:
-                    if retryable and policy.should_retry_response(response):
-                        response.close()
-                        delay = policy.delay(retries_taken, response)
-                        self._sleep(delay, str(response.status_code))
-                        retries_taken += 1
-                        continue
-                    if stream:
-                        response.read()
-                        response.close()
-                    raise self._make_status_error(response, spec.errors)
-                return response
+                if stream:
+                    response.read()
+                    response.close()
+                raise self._make_status_error(response, spec.errors)
+            return response
 
     @staticmethod
     def _sleep(seconds: float, reason: str) -> None:
@@ -720,43 +687,37 @@ class AsyncAPIClient(_BaseClient):
         policy = self.retry_policy
         key = self._new_idempotency_key(spec)
         auth = self.auth if spec.security else None
-        with self._span(spec) as span:
-            retries_taken = 0
-            while True:
-                request = self._build_request(
-                    self._http, spec, idempotency_key=key, retries_taken=retries_taken
-                )
-                retryable = retries_taken < policy.max_retries and policy.can_retry(
-                    request, self.idempotency_header
-                )
-                for hook in self.hooks.on_request:
-                    await self._call_hook(hook, request)
-                try:
-                    response = await self._http.send(request, stream=stream, auth=auth)
-                except httpx2.TransportError as exc:
-                    reason = self._transport_retry_reason(exc, request, retryable)
-                    await self._sleep(policy.delay(retries_taken), reason)
+        retries_taken = 0
+        while True:
+            request = self._build_request(
+                self._http, spec, idempotency_key=key, retries_taken=retries_taken
+            )
+            retryable = retries_taken < policy.max_retries and policy.can_retry(
+                request, self.idempotency_header
+            )
+            for hook in self.hooks.on_request:
+                await self._call_hook(hook, request)
+            try:
+                response = await self._http.send(request, stream=stream, auth=auth)
+            except httpx2.TransportError as exc:
+                reason = self._transport_retry_reason(exc, request, retryable)
+                await self._sleep(policy.delay(retries_taken), reason)
+                retries_taken += 1
+                continue
+            for response_hook in self.hooks.on_response:
+                await self._call_hook(response_hook, response)
+            if response.is_error:
+                if retryable and policy.should_retry_response(response):
+                    await response.aclose()
+                    delay = policy.delay(retries_taken, response)
+                    await self._sleep(delay, str(response.status_code))
                     retries_taken += 1
                     continue
-                for response_hook in self.hooks.on_response:
-                    await self._call_hook(response_hook, response)
-                if span is not None:
-                    span.set_attribute(
-                        "http.response.status_code", response.status_code
-                    )
-                    span.set_attribute("http.request.resend_count", retries_taken)
-                if response.is_error:
-                    if retryable and policy.should_retry_response(response):
-                        await response.aclose()
-                        delay = policy.delay(retries_taken, response)
-                        await self._sleep(delay, str(response.status_code))
-                        retries_taken += 1
-                        continue
-                    if stream:
-                        await response.aread()
-                        await response.aclose()
-                    raise self._make_status_error(response, spec.errors)
-                return response
+                if stream:
+                    await response.aread()
+                    await response.aclose()
+                raise self._make_status_error(response, spec.errors)
+            return response
 
     @staticmethod
     async def _sleep(seconds: float, reason: str) -> None:

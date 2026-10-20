@@ -103,7 +103,7 @@ class CursorPagination:
         if self.has_more and dig(state.body, self.has_more) is False:
             return None
         cursor = self.next_cursor(state)
-        if cursor is None or (self.cursor_from_item and not state.items):
+        if cursor is None:
             return None
         if cursor.startswith(("http://", "https://", "/")):
             return NextPage(url=cursor)
@@ -161,6 +161,7 @@ class PageNumberPagination:
 
 
 _LINK_RE = re.compile(r"<([^>]*)>\s*((?:;\s*[^;,]+)*)")
+_REL_NEXT_RE = re.compile(r'rel\s*=\s*"?([^";]*\s)?next(\s[^";]*)?"?')
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +175,7 @@ class LinkHeaderPagination:
         if not link:
             return None
         for url, params in _LINK_RE.findall(link):
-            if re.search(r'rel\s*=\s*"?([^";]*\s)?next(\s[^";]*)?"?', params):
+            if _REL_NEXT_RE.search(params):
                 return str(url)
         return None
 

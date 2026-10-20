@@ -1,5 +1,6 @@
 """Retry policy: which failures to retry, and how long to wait between attempts."""
 
+import contextlib
 import email.utils
 import random
 import time
@@ -59,10 +60,8 @@ class RetryPolicy:
         headers = response.headers
         seconds: float | None = None
         if (ms := headers.get("retry-after-ms")) is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 seconds = float(ms) / 1000
-            except ValueError:
-                seconds = None
         if seconds is None and (value := headers.get("retry-after")) is not None:
             try:
                 seconds = float(value)

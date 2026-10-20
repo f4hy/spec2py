@@ -50,7 +50,6 @@ class SSEDecoder:
     def __init__(self) -> None:
         self._event: str | None = None
         self._data: list[str] = []
-        self._id: str | None = None
         self._last_id: str | None = None
         self._retry: int | None = None
 

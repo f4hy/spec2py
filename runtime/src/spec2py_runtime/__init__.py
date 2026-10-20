@@ -15,6 +15,7 @@ from ._client import (
     Hooks,
     RequestOptions,
     RequestSpec,
+    __version__,
 )
 from ._exceptions import (
     APIConnectionError,
@@ -79,11 +80,6 @@ from ._types import (
     TimeoutTypes,
     is_given,
 )
-
-try:
-    from ._version import __version__
-except ImportError:  # pragma: no cover - running from a source checkout
-    __version__ = "0.0.0"
 
 __all__ = [
     "DEFAULT_MAX_RETRIES",

@@ -169,7 +169,11 @@ def _field_adapter(model: type[pydantic.BaseModel], name: str) -> TypeAdapter[An
 
 def validate_param(tp: Any, value: object) -> object:
     """Strictly validate one request value and return its JSON-compatible form."""
-    adapter = _adapter(tp)
+    return _strict_dump(_adapter(tp), value)
+
+
+def _strict_dump(adapter: TypeAdapter[Any], value: object) -> object:
+    """Validate a request value strictly and dump it to its wire form."""
     validated = adapter.validate_python(value, strict=True, context=_STRICT_CONTEXT)
     return adapter.dump_python(
         validated, mode="json", by_alias=True, exclude_unset=True
@@ -194,15 +198,10 @@ def build_body(
             continue
         adapter = _field_adapter(model, name)  # builds a deferred model first
         try:
-            validated = adapter.validate_python(
-                value, strict=True, context=_STRICT_CONTEXT
-            )
+            dumped = _strict_dump(adapter, value)
         except ValidationError as exc:
             raise _located(exc, model.__name__, name) from None
-        key = model.model_fields[name].alias or name
-        body[key] = adapter.dump_python(
-            validated, mode="json", by_alias=True, exclude_unset=True
-        )
+        body[model.model_fields[name].alias or name] = dumped
     if extra_body:
         body.update(extra_body)
     return body

@@ -6,6 +6,7 @@
     ├── APIConnectionError
     │   └── APITimeoutError
     ├── APIResponseValidationError
+    ├── PaginationOriginError
     └── APIStatusError
         ├── BadRequestError            400
         ├── AuthenticationError        401
@@ -32,6 +33,7 @@ __all__ = [
     "ConflictError",
     "InternalServerError",
     "NotFoundError",
+    "PaginationOriginError",
     "PermissionDeniedError",
     "RateLimitError",
     "UnprocessableEntityError",
@@ -82,6 +84,26 @@ class APIResponseValidationError(APIError):
         )
         self.response = response
         self.body = body
+
+
+class PaginationOriginError(APIError):
+    """A next-page URL pointed at an origin other than ``base_url``.
+
+    Following it would send the client's credentials to that host. Pass
+    ``trusted_pagination_origins=["https://other.example"]`` to the client to
+    allow it. ``request`` is the request whose response held the URL.
+    """
+
+    url: str
+
+    def __init__(self, url: str, *, base_url: str, request: httpx2.Request) -> None:
+        super().__init__(
+            f"Refusing to follow next-page URL {url!r}: its origin differs from "
+            f"base_url {base_url!r}. Add the origin to trusted_pagination_origins "
+            "if this host should receive the client's credentials.",
+            request,
+        )
+        self.url = url
 
 
 class APIStatusError(APIError):

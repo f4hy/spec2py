@@ -14,7 +14,7 @@ arrives with a dependency upgrade instead of a regeneration.
 | Streaming | SSE and NDJSON decoded into typed events (`Stream`, `AsyncStream`) |
 | Uploads | Multipart from file objects, paths, bytes or `(name, content, type)` tuples |
 | Errors | `APIError` → `APIStatusError` → `NotFoundError`, `RateLimitError`, ...; bodies parsed into declared models |
-| Observability | `Hooks(on_request=..., on_response=...)` and OpenTelemetry spans when `opentelemetry-api` is installed (`pip install spec2py-runtime[otel]`) |
+| Observability | `Hooks(on_request=..., on_response=...)` |
 | Models | `BaseModel` with lenient parsing, `Tolerant` enums, lazy validator builds |
 
 Requires Python 3.14.

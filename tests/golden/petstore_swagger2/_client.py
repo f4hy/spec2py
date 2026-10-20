@@ -3,7 +3,7 @@
 """Clients for the Petstore API."""
 
 import os
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from functools import cached_property
 
 import httpx2
@@ -52,6 +52,7 @@ class Petstore(APIClient):
         default_query: Mapping[str, object] | None = None,
         hooks: Hooks | None = None,
         strict_response_validation: bool = False,
+        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.Client | None = None,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
@@ -64,6 +65,7 @@ class Petstore(APIClient):
             timeout: Seconds (or an ``httpx2.Timeout``) per request.
             max_retries: Retries for connection errors, 408/409/429 and 5xx.
             hooks: Request/response middleware (logging, signing, test doubles).
+            trusted_pagination_origins: Other origins (``https://host[:port]``) that next-page URLs may point at; they receive this client's credentials.
             http_client: Bring your own ``httpx2`` client (proxies, mTLS, pooling).
             transport: A custom transport, e.g. ``httpx2.MockTransport`` in tests.
         """
@@ -91,6 +93,7 @@ class Petstore(APIClient):
             default_query=default_query,
             hooks=hooks,
             strict_response_validation=strict_response_validation,
+            trusted_pagination_origins=trusted_pagination_origins,
             http_client=http_client,
             transport=transport,
         )
@@ -123,6 +126,7 @@ class AsyncPetstore(AsyncAPIClient):
         default_query: Mapping[str, object] | None = None,
         hooks: Hooks | None = None,
         strict_response_validation: bool = False,
+        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.AsyncClient | None = None,
         transport: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
@@ -135,6 +139,7 @@ class AsyncPetstore(AsyncAPIClient):
             timeout: Seconds (or an ``httpx2.Timeout``) per request.
             max_retries: Retries for connection errors, 408/409/429 and 5xx.
             hooks: Request/response middleware (logging, signing, test doubles).
+            trusted_pagination_origins: Other origins (``https://host[:port]``) that next-page URLs may point at; they receive this client's credentials.
             http_client: Bring your own ``httpx2`` client (proxies, mTLS, pooling).
             transport: A custom transport, e.g. ``httpx2.MockTransport`` in tests.
         """
@@ -162,6 +167,7 @@ class AsyncPetstore(AsyncAPIClient):
             default_query=default_query,
             hooks=hooks,
             strict_response_validation=strict_response_validation,
+            trusted_pagination_origins=trusted_pagination_origins,
             http_client=http_client,
             transport=transport,
         )

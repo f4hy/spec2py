@@ -14,7 +14,14 @@ import logging
 import platform
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
+from collections.abc import (
+    Awaitable,
+    Callable,
+    Collection,
+    Generator,
+    Mapping,
+    Sequence,
+)
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import NoneType, TracebackType
@@ -29,6 +36,7 @@ from ._exceptions import (
     APIResponseValidationError,
     APIStatusError,
     APITimeoutError,
+    PaginationOriginError,
     status_error_class,
 )
 from ._files import to_httpx_files, to_multipart_data
@@ -178,6 +186,7 @@ class _BaseClient:
         idempotency_header: str | None = None,
         strict_response_validation: bool = False,
         instrument: bool = True,
+        trusted_pagination_origins: Collection[str] = (),
     ) -> None:
         self.base_url = base_url
         self.auth = auth
@@ -188,6 +197,9 @@ class _BaseClient:
         self.hooks = hooks or Hooks()
         self.idempotency_header = idempotency_header
         self.strict_response_validation = strict_response_validation
+        self.trusted_pagination_origins = frozenset(
+            _parse_origin(o) for o in trusted_pagination_origins
+        )
         self._tracer = _otel_tracer() if instrument else None
         self._owns_http_client = True
 
@@ -404,6 +416,35 @@ class _BaseClient:
         )
         return data, state
 
+    def _next_spec(
+        self, spec: RequestSpec, next_page: NextPage, response: httpx2.Response
+    ) -> RequestSpec:
+        new = copy.copy(spec)
+        if next_page.url is not None:
+            self._check_page_url(next_page.url, response)
+            new.url = next_page.url
+            new.query = None
+            new.query_styles = None
+        else:
+            new.query = {**(spec.query or {}), **next_page.params}
+        return new
+
+    def _check_page_url(self, url: str, response: httpx2.Response) -> None:
+        """Refuse next-page URLs the server points at another origin.
+
+        The follow-up request carries the client's auth, default headers and
+        query, and the operation's header and cookie parameters, so following
+        a foreign ``Link``/cursor URL would hand those credentials to that host.
+        Scheme counts too: https -> http on the same host is refused.
+        """
+        base = httpx2.URL(self.base_url)
+        target = _origin(base.join(url))
+        if target == _origin(base) or target in self.trusted_pagination_origins:
+            return
+        raise PaginationOriginError(
+            url, base_url=self.base_url, request=response.request
+        )
+
     @contextmanager
     def _span(self, spec: RequestSpec) -> Generator[Any]:
         if self._tracer is None:
@@ -423,15 +464,23 @@ def _client_kind() -> Any:
     return SpanKind.CLIENT
 
 
-def _next_spec(spec: RequestSpec, next_page: NextPage) -> RequestSpec:
-    new = copy.copy(spec)
-    if next_page.url is not None:
-        new.url = next_page.url
-        new.query = None
-        new.query_styles = None
-    else:
-        new.query = {**(spec.query or {}), **next_page.params}
-    return new
+type Origin = tuple[str, str, int | None]
+
+_DEFAULT_PORTS: Final = {"http": 80, "https": 443}
+
+
+def _origin(url: httpx2.URL) -> Origin:
+    scheme = url.scheme.lower()
+    return scheme, url.host.lower(), url.port or _DEFAULT_PORTS.get(scheme)
+
+
+def _parse_origin(value: str) -> Origin:
+    url = httpx2.URL(value)
+    if url.scheme not in _DEFAULT_PORTS or not url.host:
+        raise ValueError(
+            f"trusted pagination origin {value!r} must look like 'https://host[:port]'"
+        )
+    return _origin(url)
 
 
 def _query_dict(spec: RequestSpec) -> dict[str, object]:
@@ -454,6 +503,7 @@ class APIClient(_BaseClient):
         idempotency_header: str | None = None,
         strict_response_validation: bool = False,
         instrument: bool = True,
+        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.Client | None = None,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
@@ -468,6 +518,7 @@ class APIClient(_BaseClient):
             idempotency_header=idempotency_header,
             strict_response_validation=strict_response_validation,
             instrument=instrument,
+            trusted_pagination_origins=trusted_pagination_origins,
         )
         self._owns_http_client = http_client is None
         self._http = http_client or httpx2.Client(
@@ -579,7 +630,9 @@ class APIClient(_BaseClient):
                 response=response,
                 state=state,
                 strategy=strategy,
-                fetch=lambda next_page: fetch(_next_spec(spec, next_page)),
+                fetch=lambda next_page: fetch(
+                    self._next_spec(spec, next_page, response)
+                ),
             )
 
         return fetch(spec)
@@ -629,6 +682,7 @@ class AsyncAPIClient(_BaseClient):
         idempotency_header: str | None = None,
         strict_response_validation: bool = False,
         instrument: bool = True,
+        trusted_pagination_origins: Collection[str] = (),
         http_client: httpx2.AsyncClient | None = None,
         transport: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
@@ -643,6 +697,7 @@ class AsyncAPIClient(_BaseClient):
             idempotency_header=idempotency_header,
             strict_response_validation=strict_response_validation,
             instrument=instrument,
+            trusted_pagination_origins=trusted_pagination_origins,
         )
         self._owns_http_client = http_client is None
         self._http = http_client or httpx2.AsyncClient(
@@ -764,7 +819,9 @@ class AsyncAPIClient(_BaseClient):
                 response=response,
                 state=state,
                 strategy=strategy,
-                fetch=lambda next_page: fetch(_next_spec(spec, next_page)),
+                fetch=lambda next_page: fetch(
+                    self._next_spec(spec, next_page, response)
+                ),
             )
 
         return AsyncPaginator(lambda: fetch(spec))

@@ -204,6 +204,13 @@ class _ClientEmitter:
         )
         add("strict_response_validation", ast.Name("bool"), const(False))
         add(
+            "trusted_pagination_origins",
+            TSub(TName("Collection", "collections.abc"), (TName("str"),)).to_ast(
+                self.imports
+            ),
+            ast.Tuple([], ast.Load()),
+        )
+        add(
             "http_client",
             ast.BinOp(
                 ast.Attribute(ast.Name(httpx), "AsyncClient"), ast.BitOr(), const(None)
@@ -244,6 +251,9 @@ class _ClientEmitter:
             "timeout: Seconds (or an ``httpx2.Timeout``) per request.",
             "max_retries: Retries for connection errors, 408/409/429 and 5xx.",
             "hooks: Request/response middleware (logging, signing, test doubles).",
+            "trusted_pagination_origins: Other origins (``https://host[:port]``) "
+            "that next-page URLs may point at; they receive this client's "
+            "credentials.",
             "http_client: Bring your own ``httpx2`` client (proxies, mTLS, pooling).",
             "transport: A custom transport, e.g. ``httpx2.MockTransport`` in tests.",
         ]
@@ -284,6 +294,7 @@ class _ClientEmitter:
             "default_query": ast.Name("default_query"),
             "hooks": ast.Name("hooks"),
             "strict_response_validation": ast.Name("strict_response_validation"),
+            "trusted_pagination_origins": ast.Name("trusted_pagination_origins"),
             "http_client": ast.Name("http_client"),
             "transport": ast.Name("transport"),
         }

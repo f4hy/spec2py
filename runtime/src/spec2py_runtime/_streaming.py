@@ -14,8 +14,9 @@ from types import TracebackType
 from typing import Any, Literal, Self, cast
 
 import httpx2
+from pydantic import ValidationError
 
-from ._exceptions import APIStatusError
+from ._exceptions import APIResponseValidationError, APIStatusError
 from ._models import parse_value
 
 __all__ = [
@@ -95,16 +96,22 @@ class _Decoding[T]:
         event_type: type[T],
         stream_format: StreamFormat,
         terminator: str | None,
+        strict: bool = True,
     ) -> None:
         self.response = response
         self._event_type = event_type
         self._format = stream_format
         self._terminator = terminator
+        self._strict = strict
 
     def _parse(self, data: str) -> T:
         if self._event_type is str:
             return cast(T, data)
-        return parse_value(self._event_type, json.loads(data))
+        body = json.loads(data)
+        try:
+            return parse_value(self._event_type, body, strict=self._strict)
+        except ValidationError as exc:
+            raise APIResponseValidationError(self.response, body, str(exc)) from exc
 
     def _raise_error_event(self, sse: ServerSentEvent) -> None:
         try:

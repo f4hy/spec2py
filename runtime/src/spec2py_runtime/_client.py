@@ -430,11 +430,14 @@ class _BaseClient:
         body = _decode_body(response)
         raw_items = dig(body, strategy.items)
         items = cast(list[object], raw_items) if isinstance(raw_items, list) else []
-        data = parse_value(
-            list[item_type],  # type: ignore[valid-type]
-            items,
-            strict=self.strict_response_validation,
-        )
+        try:
+            data = parse_value(
+                list[item_type],  # type: ignore[valid-type]
+                items,
+                strict=self.strict_response_validation,
+            )
+        except ValidationError as exc:
+            raise APIResponseValidationError(response, body, str(exc)) from exc
         state = PageState(
             params=params, body=body, headers=response.headers, items=items
         )
@@ -637,6 +640,7 @@ class APIClient(_BaseClient):
                 event_type=event_type,
                 stream_format=stream_format,
                 terminator=terminator,
+                strict=self.strict_response_validation,
             )
 
         return StreamManager(open_stream)
@@ -785,6 +789,7 @@ class AsyncAPIClient(_BaseClient):
                 event_type=event_type,
                 stream_format=stream_format,
                 terminator=terminator,
+                strict=self.strict_response_validation,
             )
 
         return AsyncStreamManager(open_stream)

@@ -536,9 +536,20 @@ class _Planner:
 
     def type_of(self, schema: Schema, hint: str, ctx: Ctx) -> TypeExpr:
         t = self._type_of(schema, hint, ctx)
-        if schema.nullable:
+        if schema.nullable or self.refs_nullable_model(schema):
             t = TUnion.of(t, TNone())
         return t
+
+    def refs_nullable_model(self, schema: Schema) -> bool:
+        """A ``$ref`` to a nullable object component.
+
+        The component becomes a class, which cannot carry ``| None`` itself (an
+        alias does), so every reference to it has to.
+        """
+        if schema.kind is not Kind.REF or schema.ref not in self.api.schemas:
+            return False
+        target = self.api.schemas[schema.ref]
+        return target.kind is Kind.OBJECT and target.nullable
 
     def _type_of(self, s: Schema, hint: str, ctx: Ctx) -> TypeExpr:
         match s.kind:
@@ -1108,6 +1119,7 @@ class _Planner:
             target.kind is Kind.OBJECT
             and bool(self.all_properties(target))
             and not schema.nullable
+            and not self.refs_nullable_model(schema)
         )
         if not flat:
             method.body_mode = "whole"
@@ -1126,11 +1138,18 @@ class _Planner:
                 model_name, target, source=f"request body: {method.operation.key}"
             )
         method.body_model = TName(model_name, MODELS)
+        props = {p.name: p for p in self.all_properties(target)}
         for f in self.model_fields(model_name):
             if f.read_only:
                 continue
-            prop = next(p for p in self.all_properties(target) if p.name == f.wire_name)
-            ptype = self.type_of(prop.schema, model_name + pascal(prop.name), "request")
+            # A discriminator tag is a field the schema never declared as a
+            # property; it keeps the Literal type the model gave it.
+            prop = props.get(f.wire_name)
+            ptype = (
+                self.type_of(prop.schema, model_name + pascal(prop.name), "request")
+                if prop is not None
+                else f.type
+            )
             py = names.claim(f.py_name, suffix="_body")
             param = PParam(
                 py,
@@ -1140,7 +1159,7 @@ class _Planner:
                 f.required,
                 f.doc,
                 f.deprecated,
-                nullable=prop.schema.nullable,
+                nullable=prop is not None and prop.schema.nullable,
             )
             method.params.append(param)
 

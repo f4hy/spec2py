@@ -94,14 +94,15 @@ class _ResourceEmitter:
             and isinstance(t.base, TName)
             and t.base.name in ("list", "dict")
         )
-        if is_class:
-            return self.ann(t)
-        # ``cast(type[X | Y], X | Y)`` keeps the precise result type, where
-        # passing the union bare isn't a ``type[T]`` to checkers.
-        # Inside the method body a parameter may shadow builtins (``type``).
+        # Inside the method body a parameter may shadow builtins (``type``,
+        # ``object``), so both forms render those as ``builtins.x``.
         saved = self.imports.shadowed
         self.imports.shadowed = saved | self.body_shadowed
         try:
+            if is_class:
+                return self.ann(t)
+            # ``cast(type[X | Y], X | Y)`` keeps the precise result type, where
+            # passing the union bare isn't a ``type[T]`` to checkers.
             type_of = TSub(TName("type"), (t.static(),)).to_ast(self.imports)
             value = self.ann(t)
         finally:

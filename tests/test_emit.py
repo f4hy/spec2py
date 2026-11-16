@@ -5,14 +5,16 @@ change in output; the diff then shows up in review.
 """
 
 import ast
+import json
 import os
 import pathlib
+import tomllib
 
 import pytest
 
 from spec2py import generate
 from spec2py.config import Config
-from spec2py.emit.package import MANIFEST, render_package
+from spec2py.emit.package import MANIFEST, RUNTIME_REQUIREMENT, render_package
 from spec2py.pipeline import load_api
 
 from .conftest import generate_package
@@ -144,8 +146,6 @@ def test_large_specs_split_models_into_a_package(tmp_path: pathlib.Path) -> None
         "oneOf": [{"$ref": "#/components/schemas/Thing1"}, {"type": "string"}]
     }
     spec = tmp_path / "big.json"
-    import json
-
     spec.write_text(
         json.dumps(
             {
@@ -194,3 +194,57 @@ def test_custom_resource_subclass_is_instantiated(
     assert type(client.invoices).__module__ == "acme._custom.invoices"
     assert hasattr(client.invoices, "total_open")
     assert type(acme.AsyncAcme(api_key="k").invoices).__name__ == "AsyncInvoices"
+
+
+def test_cast_to_survives_a_parameter_shadowing_a_builtin(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Jira: a body field named ``object`` on an operation whose response is
+    # untyped. ``cast_to=object`` would pass the argument, not the builtin.
+    body = {
+        "type": "object",
+        "required": ["object"],
+        "properties": {"object": {"type": "string"}},
+    }
+    spec = tmp_path / "shadow.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "openapi": "3.1.0",
+                "info": {"title": "Shadow", "version": "1"},
+                "paths": {
+                    "/links": {
+                        "put": {
+                            "operationId": "updateLink",
+                            "tags": ["links"],
+                            "requestBody": {
+                                "content": {"application/json": {"schema": body}}
+                            },
+                            "responses": {
+                                "200": {
+                                    "description": "ok",
+                                    "content": {"application/json": {"schema": {}}},
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+        )
+    )
+    package = generate_package(spec, tmp_path / "out")
+    source = (package / "resources" / "links.py").read_text()
+    assert "object: str" in source
+    assert "cast_to=builtins.object" in source
+    assert "cast_to=object" not in source
+
+
+def test_generated_projects_and_the_generator_require_the_same_runtime(
+    specs: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    generate(str(specs / "acme.yaml"), tmp_path, Config())
+    generated = tomllib.loads((tmp_path / "pyproject.toml").read_text())
+    assert generated["project"]["dependencies"] == [RUNTIME_REQUIREMENT]
+    root = pathlib.Path(__file__).parent.parent / "pyproject.toml"
+    own = tomllib.loads(root.read_text())["project"]["dependencies"]
+    assert RUNTIME_REQUIREMENT in own

@@ -69,13 +69,13 @@ not claim broader compatibility or better performance than those projects.
   unknown enum values. Structural response validation rejects malformed payloads
   by default; explicit best-effort parsing can return raw values or missing
   attributes. Request bodies are validated before sending. See the
-  [validation and compatibility policy](runtime/README.md#validation-and-compatibility).
+  [validation and compatibility policy](https://github.com/f4hy/spec2py/blob/main/runtime/README.md#validation-and-compatibility).
 - **Typed errors.** `NotFoundError`, `RateLimitError`, `UnprocessableEntityError`
   and others, each with `.body` plus `.parsed`, the error model declared for that
   status.
 - **Runtime behaviour that's fixed by upgrading, not regenerating.** Retries,
   auth, pagination, streaming and uploads live in
-  [`spec2py-runtime`](runtime/README.md), not in generated code.
+  [`spec2py-runtime`](https://github.com/f4hy/spec2py/blob/main/runtime/README.md), not in generated code.
 - **Deterministic output.** The same spec, config, generator and formatter versions produce byte-identical
   files, so diffs in review mean something.
 

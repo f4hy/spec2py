@@ -9,17 +9,12 @@ jobs:
   validate:
     uses: ./.github/workflows/ci.yml
 
-  build-and-publish:
+  build:
     needs: validate
     timeout-minutes: 15
-    name: Build packages and publish to PyPI
+    name: Build and smoke-test both distributions
     runs-on: ubuntu-latest
-    environment: pypi
-
-    # Required for PyPI Trusted Publishing (OIDC). Both projects, spec2py and
-    # spec2py-runtime, need this repository configured as a trusted publisher.
     permissions:
-      id-token: write
       contents: read
 
     steps:
@@ -50,5 +45,54 @@ jobs:
           uv pip install --python /tmp/spec2py-release-smoke/bin/python /tmp/release-client
           /tmp/spec2py-release-smoke/bin/python -c "from acme import Acme, AsyncAcme"
 
-      - name: Publish to PyPI
-        run: uv publish
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # Each project publishes from its own job and environment. A PyPI trusted
+  # publisher is matched on repository + workflow + environment, and a token
+  # from a pending publisher can only create the one project it names; with
+  # both projects on the same environment the token fits only one of them.
+  # PyPI publishers: spec2py-runtime -> environment `pypi-runtime`,
+  # spec2py -> environment `pypi`.
+  publish-runtime:
+    needs: build
+    timeout-minutes: 10
+    name: Publish spec2py-runtime to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi-runtime
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+      - name: Publish spec2py-runtime
+        run: uv publish dist/spec2py_runtime-*
+
+  publish-generator:
+    # After the runtime, which spec2py depends on.
+    needs: publish-runtime
+    timeout-minutes: 10
+    name: Publish spec2py to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+      - name: Publish spec2py
+        run: uv publish dist/spec2py-*

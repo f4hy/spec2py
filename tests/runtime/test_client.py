@@ -106,7 +106,9 @@ def test_none_and_bytes_and_text_responses() -> None:
 
 def test_lenient_parsing_keeps_unknown_fields_and_bad_values() -> None:
     rec = Recorder([ok({"id": "1", "value": "not-a-number", "new": [1]})])
-    item = client(rec).request("get", "/x", cast_to=Item)
+    item = client(rec, strict_response_validation=False).request(
+        "get", "/x", cast_to=Item
+    )
     assert item.id == "1"
     assert item.value == "not-a-number"  # type: ignore[comparison-overlap]
     assert item.model_extra == {"new": [1]}
@@ -115,7 +117,7 @@ def test_lenient_parsing_keeps_unknown_fields_and_bad_values() -> None:
 def test_strict_response_validation_raises() -> None:
     rec = Recorder([ok({"id": 1, "value": "nope"})])
     with pytest.raises(APIResponseValidationError):
-        client(rec, strict_response_validation=True).request("get", "/x", cast_to=Item)
+        client(rec).request("get", "/x", cast_to=Item)
 
 
 # -- errors ------------------------------------------------------------------------

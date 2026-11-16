@@ -99,6 +99,7 @@ def test_best_effort_parse_keeps_what_validates() -> None:
             "lines": [{"amount": 1}, {"amount": "x"}],
             "new": True,
         },
+        strict=False,
     )
     assert inv.id == "1"
     assert isinstance(inv.lines[0], Line)
@@ -106,7 +107,7 @@ def test_best_effort_parse_keeps_what_validates() -> None:
     assert inv.model_extra == {"new": True}
     with pytest.raises(ValidationError):
         parse_value(Invoice, {"id": 1, "status": "open"}, strict=True)
-    items = parse_value(list[Line], [{"amount": 1}, {"amount": "bad"}])
+    items = parse_value(list[Line], [{"amount": 1}, {"amount": "bad"}], strict=False)
     assert items[0].amount == 1
 
 
@@ -155,3 +156,23 @@ def test_link_models_resolves_cross_module_references() -> None:
         assert sub.A.model_validate({"b": {"x": 1}}).b.x == 1
     finally:
         del sys.modules["fakepkg.models._a"], sys.modules["fakepkg.models._b"]
+
+
+def test_request_revalidates_nested_model_instances() -> None:
+    line = Line.model_construct(amount="bad")
+    invoice = Invoice.model_construct(id="1", status="open", lines=[line])
+    with pytest.raises(ValidationError):
+        validate_param(Invoice, invoice)
+    with pytest.raises(ValidationError):
+        validate_param(list[Line], [line])
+
+
+def test_response_requires_required_attributes_by_default() -> None:
+    with pytest.raises(ValidationError):
+        parse_value(Line, {})
+
+
+def test_response_enum_is_rejected_when_reused_in_request() -> None:
+    invoice = parse_value(Invoice, {"id": "1", "status": "future"})
+    with pytest.raises(ValidationError):
+        validate_param(Invoice, invoice)

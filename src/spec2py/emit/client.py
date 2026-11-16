@@ -194,7 +194,7 @@ class _ClientEmitter:
             TUnion.of(TName("Hooks", RUNTIME), TNone()).to_ast(self.imports),
             const(None),
         )
-        add("strict_response_validation", ast.Name("bool"), const(False))
+        add("strict_response_validation", ast.Name("bool"), const(True))
         add(
             "trusted_pagination_origins",
             TSub(TName("Collection", "collections.abc"), (TName("str"),)).to_ast(

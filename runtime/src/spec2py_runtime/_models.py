@@ -1,7 +1,7 @@
 """Model base class and the "lenient in, strict out" validation helpers.
 
 Responses are parsed leniently: unknown fields are kept and unknown enum values
-are tolerated, so a newer server never breaks an older client. Requests are
+are tolerated, to tolerate additive server changes. Requests are
 validated strictly before they are sent: wrong types fail locally, before a
 round trip.
 """
@@ -53,6 +53,7 @@ class BaseModel(pydantic.BaseModel):
         arbitrary_types_allowed=True,
         protected_namespaces=(),
         defer_build=True,
+        revalidate_instances="always",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -87,10 +88,11 @@ def _adapter(tp: Any) -> TypeAdapter[Any]:
     return TypeAdapter(tp)
 
 
-def parse_value[T](tp: type[T], data: object, *, strict: bool = False) -> T:
+def parse_value[T](tp: type[T], data: object, *, strict: bool = True) -> T:
     """Validate response ``data`` against ``tp``.
 
-    With ``strict=False`` (the default) a body that doesn't fully match is still
+    By default, malformed responses raise ``ValidationError``.
+    With ``strict=False`` a body that doesn't fully match is still
     returned: every field that validates is typed, the rest keep their raw JSON
     values, and a warning is logged. ``strict=True`` raises ``ValidationError``.
     """

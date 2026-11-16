@@ -18,3 +18,18 @@ arrives with a dependency upgrade instead of a regeneration.
 | Models | `BaseModel` with lenient parsing, `Tolerant` enums, lazy validator builds |
 
 Requires Python 3.14.
+
+## Validation and compatibility
+
+Responses reject missing required fields and invalid field values by default.
+Unknown fields are retained and unknown enum values are tolerated. Set
+`strict_response_validation=False` explicitly for best-effort parsing; its
+results can contain raw values or missing attributes and need defensive handling.
+Requests revalidate generated model instances, including nested instances.
+
+The initial generator and generated clients require `spec2py-runtime>=0.1.0,<0.2.0`.
+Within the 0.1 series, runtime patch releases preserve the generated-code API.
+Breaking runtime changes require a new minor series and regeneration to adopt it.
+When emission starts using a new runtime feature, raise the minimum patch version
+in both the generator dependency and generated project metadata. Development
+snapshots before 0.1.0 are not release candidates for this compatibility range.

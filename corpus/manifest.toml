@@ -37,8 +37,8 @@ sha256 = "2b7b040e296e92e40b5163e0bf90c3be95043ec4d27e193c491017614f69a54e"
 
 [[spec]]
 name = "twilio"
-url = "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/json/twilio_api_v2010.json"
-sha256 = "bfdf249a129819af274d6bdc7672156ea3416ad48670a6f0544def6ef386ba87"
+url = "https://raw.githubusercontent.com/twilio/twilio-oai/6891362428239e2b29339718ffb7bd9fb86ff9cb/spec/json/twilio_api_v2010.json"
+sha256 = "f5efc0ed7078b035f675e04aa2774eaea43a0606c1d699b1fd35759258e5ddc6"
 
 [[spec]]
 name = "openai"
@@ -53,6 +53,6 @@ large = true
 
 [[spec]]
 name = "github"
-url = "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json"
-sha256 = "65ca6210f72021d07e4608fc26787c8132d77f8f3a475d8c065f0d7f5f02f6dc"
+url = "https://raw.githubusercontent.com/github/rest-api-description/2a33d9cc5d1dc6ca603b908e0796454af88c1999/descriptions/api.github.com/api.github.com.json"
+sha256 = "f7a3de68869181d34b232d88840d31f8157ade45cad1746eaab90cd3c801b31c"
 large = true

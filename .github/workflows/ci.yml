@@ -4,9 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   lint-and-test:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -44,6 +46,7 @@ jobs:
   corpus:
     # Regenerates every real-world spec in corpus/manifest.toml and runs the
     # static gates on each client. Large specs (Stripe, GitHub) included.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

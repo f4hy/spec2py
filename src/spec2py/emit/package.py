@@ -125,9 +125,6 @@ def _resources_init(plan: Plan) -> ast.Module:
 
 
 def _pyproject(plan: Plan, project_name: str) -> str:
-    runtime_floor = (
-        ".".join(__version__.split(".")[:2]) if __version__[0].isdigit() else "0"
-    )
     desc = f"Python client for the {plan.client.api_name}".replace('"', "'")
     return (
         "[project]\n"
@@ -136,7 +133,7 @@ def _pyproject(plan: Plan, project_name: str) -> str:
         f'description = "{desc}"\n'
         'readme = "README.md"\n'
         'requires-python = ">=3.14"\n'
-        f'dependencies = ["spec2py-runtime>={runtime_floor}"]\n\n'
+        'dependencies = ["spec2py-runtime>=0.1.0,<0.2.0"]\n\n'
         "[build-system]\n"
         'requires = ["hatchling"]\n'
         'build-backend = "hatchling.build"\n\n'

@@ -5,6 +5,7 @@ import pytest
 
 from spec2py_runtime import (
     ApiKeyAuth,
+    APIResponseValidationError,
     BasicAuth,
     BearerAuth,
     CursorPagination,
@@ -318,3 +319,18 @@ async def test_async_cross_origin_next_url_is_refused() -> None:
                     "get", "/items", item_type=Item, strategy=LinkHeaderPagination()
                 )
             ]
+
+
+def test_malformed_page_raises_response_validation_error() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"data": [{"id": "a"}, {"id": None}]})
+
+    with pytest.raises(APIResponseValidationError) as info:
+        client(handler).get_api_list(
+            "get", "/i", item_type=Item, strategy=CursorPagination()
+        )
+    assert info.value.body == {"data": [{"id": "a"}, {"id": None}]}
+    page = client(handler, strict_response_validation=False).get_api_list(
+        "get", "/i", item_type=Item, strategy=CursorPagination()
+    )
+    assert page.data[0].id == "a"

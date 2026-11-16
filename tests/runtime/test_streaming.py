@@ -1,7 +1,13 @@
 import httpx2
 import pytest
 
-from spec2py_runtime import APIStatusError, BaseModel, NotFoundError, SSEDecoder
+from spec2py_runtime import (
+    APIResponseValidationError,
+    APIStatusError,
+    BaseModel,
+    NotFoundError,
+    SSEDecoder,
+)
 from spec2py_runtime._streaming import ServerSentEvent
 
 from .helpers import Recorder, async_client, client
@@ -111,3 +117,18 @@ async def test_async_ndjson_and_raw_events() -> None:
     async with async_client(rec) as c:
         async with c.stream("get", "/s", event_type=str) as ev:
             assert [e.event async for e in ev.events()] == ["x"]
+
+
+def test_malformed_event_follows_the_client_validation_setting() -> None:
+    body = 'data: {"text": "ok"}\n\ndata: {"text": null}\n\n'
+    with (
+        client(Recorder([sse(body)])).stream(
+            "post", "/complete", event_type=Delta, body={}
+        ) as events,
+        pytest.raises(APIResponseValidationError) as info,
+    ):
+        list(events)
+    assert info.value.body == {"text": None}
+    lenient = client(Recorder([sse(body)]), strict_response_validation=False)
+    with lenient.stream("post", "/complete", event_type=Delta, body={}) as events:
+        assert [e.text for e in events] == ["ok", None]  # type: ignore[list-item]

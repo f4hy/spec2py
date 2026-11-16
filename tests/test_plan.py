@@ -875,3 +875,84 @@ def test_relative_server_requires_base_url() -> None:
     plan = plan_of({"servers": [{"url": "/api"}]})
     assert plan.client.base_url is None
     assert any("relative" in n for n in plan.notes)
+
+
+def test_ref_to_nullable_object_component_is_optional() -> None:
+    # OpenAPI 3.0 `nullable: true` on an object component (GitHub's
+    # `nullable-simple-user`): the class can't carry `| None`, so each use does.
+    plan = plan_of(
+        {
+            "openapi": "3.0.3",
+            "components": {
+                "schemas": {
+                    "NullableUser": {
+                        "type": "object",
+                        "nullable": True,
+                        "properties": {"login": {"type": "string"}},
+                    },
+                    "Issue": {
+                        "type": "object",
+                        "required": ["assignee", "assignees"],
+                        "properties": {
+                            "assignee": {"$ref": "#/components/schemas/NullableUser"},
+                            "assignees": {
+                                "type": "array",
+                                "items": {"$ref": "#/components/schemas/NullableUser"},
+                            },
+                        },
+                    },
+                }
+            },
+        }
+    )
+    fields = {f.py_name: f for f in model(plan, "Issue").fields}
+    assert fields["assignee"].type.render() == "NullableUser | None"
+    assert fields["assignee"].required
+    assert fields["assignees"].type.render() == "list[NullableUser | None]"
+
+
+def test_flat_body_with_discriminator_tag_the_schema_never_declared() -> None:
+    # Linode: the union names a discriminator property its variants don't have.
+    variant = {"type": "object", "properties": {"label": {"type": "string"}}}
+    plan = plan_of(
+        {
+            "paths": {
+                "/things": {
+                    "get": op(
+                        "listThings",
+                        responses={
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "oneOf": [
+                                                {"$ref": "#/components/schemas/A"},
+                                                {"$ref": "#/components/schemas/B"},
+                                            ],
+                                            "discriminator": {"propertyName": "type"},
+                                        }
+                                    }
+                                },
+                            }
+                        },
+                    ),
+                    "put": op(
+                        "updateThing",
+                        requestBody={
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/A"}
+                                }
+                            }
+                        },
+                    ),
+                }
+            },
+            "components": {"schemas": {"A": variant, "B": variant}},
+        }
+    )
+    params = {p.py_name: p for p in method(plan, "invoices", "update_thing").params}
+    assert params["type"].type.render() == "Literal['A']"
+    assert not params["type"].required
+    assert params["label"].type.render() == "str"

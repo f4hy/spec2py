@@ -6,7 +6,12 @@ on:
       - 'v*' # e.g. v0.1.0 publishes spec2py and spec2py-runtime at 0.1.0
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
   build-and-publish:
+    needs: validate
+    timeout-minutes: 15
     name: Build packages and publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
@@ -33,6 +38,17 @@ jobs:
 
       - name: Build both distributions
         run: uv build --all-packages
+
+      - name: Smoke test installed wheels
+        run: |
+          uv venv /tmp/spec2py-release-smoke --python 3.14
+          uv pip install --python /tmp/spec2py-release-smoke/bin/python dist/*.whl
+          cd /tmp
+          /tmp/spec2py-release-smoke/bin/spec2py --help
+          /tmp/spec2py-release-smoke/bin/python -c "import spec2py, spec2py_runtime"
+          /tmp/spec2py-release-smoke/bin/spec2py generate "$GITHUB_WORKSPACE/tests/specs/acme.yaml" -o /tmp/release-client --layout project
+          uv pip install --python /tmp/spec2py-release-smoke/bin/python /tmp/release-client
+          /tmp/spec2py-release-smoke/bin/python -c "from acme import Acme, AsyncAcme"
 
       - name: Publish to PyPI
         run: uv publish

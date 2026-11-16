@@ -196,7 +196,7 @@ class _BaseClient:
         default_query: Mapping[str, object] | None = None,
         hooks: Hooks | None = None,
         idempotency_header: str | None = None,
-        strict_response_validation: bool = False,
+        strict_response_validation: bool = True,
         trusted_pagination_origins: Collection[str] = (),
     ) -> None:
         self.base_url = base_url

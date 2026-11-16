@@ -18,7 +18,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spec2py-runtime",
+    "spec2py-runtime>=0.1.0,<0.2.0",
     "pyyaml>=6.0.2",
     "ruff>=0.15.0",
 ]

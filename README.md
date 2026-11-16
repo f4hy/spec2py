@@ -1,9 +1,14 @@
 # spec2py
 
-A Python-only OpenAPI client generator aimed at the quality of the best
-commercial SDKs. You get Pydantic v2 models, an [httpx2](https://github.com/pydantic/httpx2)
-runtime, sync and async clients generated from one source, and pagination,
-retries, streaming and uploads built in.
+Ergonomic Python SDKs with pagination, streaming, and maintainable regeneration.
+
+spec2py turns OpenAPI documents into resource-oriented Python clients with
+Pydantic v2 models, sync and async interfaces, and a shared
+[httpx2](https://github.com/pydantic/httpx2) runtime. Overlays, API diffs, and
+preserved customization directories help you maintain a client as its API evolves.
+
+**Experimental alpha.** Generated APIs and runtime behavior may change. Review
+`NOTES.md` and test generated clients against your service before distributing them.
 
 ```console
 $ uvx spec2py generate https://api.acme.com/openapi.json -o clients/acme
@@ -33,29 +38,45 @@ async with AsyncAcme() as aclient:
         ...
 ```
 
-Requires Python 3.14.
+Requires Python 3.14 for both generation **and applications using generated clients**.
+
+## When to choose spec2py
+
+Use it when you want a Python-only SDK with methods such as
+`client.invoices.create(...)`, built-in pagination and streaming, and a repeatable
+way to regenerate without losing your custom code. Runtime fixes can be delivered
+through dependency updates within the supported compatibility range.
+
+If your SDK must support older Python versions, or you need multiple target
+languages, evaluate [OpenAPI Generator](https://openapi-generator.tech/).
+[openapi-python-client](https://github.com/openapi-generators/openapi-python-client)
+is another established Python-focused option with customizable templates.
+spec2py emphasizes its integrated SDK interface and maintenance workflow; it does
+not claim broader compatibility or better performance than those projects.
 
 ## What you get
 
 - **Code you'd write by hand.** One client object, resources as attributes,
   path parameters positional, everything else keyword-only, docstrings from the
-  spec, `@deprecated` on deprecated operations. Every generated client passes
-  `mypy --strict`, strict pyright, ty and ruff with zero suppressions. That's
-  enforced in CI, including on Stripe's and GitHub's specs.
+  spec, `@deprecated` on deprecated operations. CI checks fixture and corpus clients with
+  `mypy --strict`, strict pyright, ty and ruff, including Stripe and GitHub specs.
+  These checks do not guarantee that every input spec produces correct behavior.
 - **One source, two clients.** Resources are generated once as async code; the
   sync variant is derived mechanically from the AST, so the two can't drift.
 - **"Omit" versus "send null".** Optional parameters default to `NOT_GIVEN`, so
   `update(memo=None)` sends `{"memo": null}` and `update()` sends `{}`.
-- **Lenient in, strict out.** Responses keep unknown fields and tolerate unknown
-  enum values, so a newer server never breaks an older client. Request bodies are
-  validated strictly before sending, and errors name the bad argument.
+- **Tolerant of additive changes.** Responses retain unknown fields and tolerate
+  unknown enum values. Structural response validation rejects malformed payloads
+  by default; explicit best-effort parsing can return raw values or missing
+  attributes. Request bodies are validated before sending. See the
+  [validation and compatibility policy](runtime/README.md#validation-and-compatibility).
 - **Typed errors.** `NotFoundError`, `RateLimitError`, `UnprocessableEntityError`
   and others, each with `.body` plus `.parsed`, the error model declared for that
   status.
 - **Runtime behaviour that's fixed by upgrading, not regenerating.** Retries,
   auth, pagination, streaming and uploads live in
   [`spec2py-runtime`](runtime/README.md), not in generated code.
-- **Deterministic output.** The same spec and config produce byte-identical
+- **Deterministic output.** The same spec, config, generator and formatter versions produce byte-identical
   files, so diffs in review mean something.
 
 ## Commands
@@ -168,7 +189,7 @@ over for every item.
 
 ```bash
 uv sync --all-packages      # generator + runtime (uv workspace) + dev tools
-uv run pytest -q            # ~230 tests, including strict type checks of generated clients
+uv run pytest -q            # includes strict type checks of generated clients
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyright
 uv run corpus/run.py --gates   # real-world specs (Stripe, GitHub, OpenAI, Twilio...) + scorecard
 SPEC2PY_UPDATE_GOLDEN=1 uv run pytest tests/test_emit.py tests/test_normalize_ir.py  # accept output changes

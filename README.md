@@ -1,5 +1,7 @@
 # spec2py
 
+[![PyPI](https://img.shields.io/pypi/v/spec2py)](https://pypi.org/project/spec2py/)
+
 Ergonomic Python SDKs with pagination, streaming, and maintainable regeneration.
 
 spec2py turns OpenAPI documents into resource-oriented Python clients with
